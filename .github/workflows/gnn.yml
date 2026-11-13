@@ -1,0 +1,42 @@
+name: Experimental HPO GNN Evaluation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/gnn.py'
+      - 'src/evaluate_gnn.py'
+      - 'tests/test_gnn.py'
+      - '.github/workflows/gnn.yml'
+jobs:
+  gnn_pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install project dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install CPU-only PyTorch
+        run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run GNN unit tests with PyTorch
+        run: python -m pytest tests/test_gnn.py tests/test_gnn_graph.py -q
+      - name: Prepare official HPO profiles
+        run: python -m src.data
+      - name: Prepare published patient cases
+        run: python -m src.rarebench --limit-per-subset 100000
+      - name: Run initial GNN patient-case pilot
+        env:
+          OMP_NUM_THREADS: '2'
+          MKL_NUM_THREADS: '2'
+        run: python -m src.evaluate_gnn --train-diseases 8 --epochs 1 --max-cases 12
+      - name: Upload GNN pilot metrics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gnn-pilot-results
+          path: |
+            results/gnn_external_summary.json
+            results/gnn_external_cases.csv
+          if-no-files-found: warn
