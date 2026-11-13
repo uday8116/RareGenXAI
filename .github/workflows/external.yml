@@ -35,5 +35,6 @@ jobs:
           path: |
             data/external/rarebench_manifest.json
             results/external_case_results.csv
+            results/external_cohort_summary.csv
             results/ml_summary.csv
           if-no-files-found: warn
