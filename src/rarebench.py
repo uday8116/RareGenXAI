@@ -19,51 +19,44 @@ HPO = re.compile(r"^HP:\d+$")
 
 
 def fetch_cases(subsets=("LIRICAL", "MME", "HMS"), limit_per_subset=30):
-    session = requests.Session()
-    response = session.get(f"{API}/splits", params={"dataset": DATASET}, timeout=90)
+    """Download the original RareBench archive; HF dataset server cannot execute its script."""
+    import io
+    import zipfile
+    url = "https://huggingface.co/datasets/chenxz/RareBench/resolve/main/data.zip"
+    response = requests.get(url, timeout=180)
     response.raise_for_status()
-    splits = response.json()["splits"]
+    archive_sha256 = hashlib.sha256(response.content).hexdigest()
     rows, audit = [], []
-    for subset in subsets:
-        options = [s for s in splits if s["config"].lower() == subset.lower() and s["split"] == "test"]
-        if not options:
-            raise ValueError(f"No public test split for {subset}; available: {[(s['config'],s['split']) for s in splits]}")
-        item = options[0]
-        total = min(int(item["num_rows"]), limit_per_subset)
-        collected = 0
-        for offset in range(0, total, 100):
-            request = session.get(f"{API}/rows", params={"dataset": DATASET,
-                "config": item["config"], "split": item["split"], "offset": offset,
-                "length": min(100, total-offset)}, timeout=120)
-            request.raise_for_status()
-            for entry in request.json()["rows"]:
-                raw = entry["row"]
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        for subset in subsets:
+            matches = [name for name in archive.namelist()
+                       if name.endswith(f"/{subset}.jsonl") or name == f"{subset}.jsonl"]
+            if len(matches) != 1:
+                raise ValueError(f"Expected exactly one JSONL file for {subset}, got {matches}")
+            with archive.open(matches[0]) as handle:
+                raw_cases = [json.loads(line) for line in handle]
+            collected = 0
+            for idx, raw in enumerate(raw_cases[:limit_per_subset]):
                 terms = raw.get("Phenotype", [])
                 diagnoses = raw.get("RareDisease", [])
                 if isinstance(terms, str):
-                    try:
-                        terms = json.loads(terms)
-                    except json.JSONDecodeError:
-                        terms = re.findall(r"HP:\d+", terms)
+                    terms = re.findall(r"HP:\\d+", terms)
                 if isinstance(diagnoses, str):
-                    try:
-                        diagnoses = json.loads(diagnoses)
-                    except json.JSONDecodeError:
-                        diagnoses = [diagnoses]
+                    diagnoses = [diagnoses]
                 if not isinstance(terms, list) or not isinstance(diagnoses, list):
                     continue
                 terms = sorted({str(t) for t in terms if HPO.fullmatch(str(t))})
-                diagnoses = [str(d) for d in diagnoses if str(d).strip()]
+                diagnoses = [str(d).strip() for d in diagnoses if str(d).strip()]
                 if len(terms) < 3 or len(diagnoses) != 1:
                     continue
-                rows.append({"case_id": f"{subset}-{entry['row_idx']}",
+                rows.append({"case_id": f"{subset}-{idx}",
                              "disease_id": diagnoses[0],
                              "hpo_ids": ";".join(terms), "cohort": subset})
                 collected += 1
-        audit.append({"subset": subset, "available": item["num_rows"], "requested": total,
-                      "eligible": collected})
-    return rows, audit
-
+            audit.append({"subset": subset, "available": len(raw_cases),
+                          "requested": min(limit_per_subset, len(raw_cases)),
+                          "eligible": collected})
+    return rows, audit, archive_sha256
 
 def main():
     p = argparse.ArgumentParser()
@@ -71,7 +64,7 @@ def main():
     p.add_argument("--subsets", nargs="+", default=["LIRICAL", "MME", "HMS"])
     p.add_argument("--output", default="data/external/rarebench_cases.csv")
     args = p.parse_args()
-    rows, audit = fetch_cases(args.subsets, args.limit_per_subset)
+    rows, audit, archive_sha256 = fetch_cases(args.subsets, args.limit_per_subset)
     if not rows:
         raise RuntimeError("No usable public patient cases downloaded")
     output = Path(args.output)
@@ -81,7 +74,7 @@ def main():
         writer.writeheader()
         writer.writerows(rows)
     metadata = {"source": f"https://huggingface.co/datasets/{DATASET}",
-                "dataset": DATASET, "cohorts": audit, "eligible_total": len(rows),
+                "dataset": DATASET, "archive_sha256": archive_sha256, "cohorts": audit, "eligible_total": len(rows),
                 "sha256": hashlib.sha256(output.read_bytes()).hexdigest(),
                 "selection": "first N public test rows per cohort; >=3 valid HPO terms; single diagnosis",
                 "caveat": "External patient cases, but HPO annotation knowledge overlaps candidate profiles"}
