@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# RareGenXAI generated datasets and results
+data/raw/
+data/processed/
+results/*.csv
+results/*.png
+.DS_Store
