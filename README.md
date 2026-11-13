@@ -4,7 +4,7 @@
 
 A reproducible **research prototype** that prioritizes candidate rare diseases using official HPO disease–phenotype annotations. It provides transparent per-finding score contributions and an experimental evidence-quality weighting scheme.
 
-> **Safety:** This is not a medical device and must not be used for diagnosis, treatment, or clinical decision-making. Scores are ranking scores, **not** probabilities. The application uses disease annotation knowledge, not independent patient data.
+> **Safety:** This is not a medical device and must not be used for diagnosis, treatment, or clinical decision-making. Scores are ranking scores, **not** probabilities. The application uses disease annotation knowledge; an external retrospective patient-case evaluation has also been completed.
 
 ## Features
 - Download and parse official HPO ontology (`hp.obo`) and disease annotations (`phenotype.hpoa`)
@@ -58,6 +58,16 @@ The source files are fetched at runtime from the official HPO PURLs, and a SHA-2
 - Köhler et al., 2009, Phenomizer: https://doi.org/10.1016/j.ajhg.2009.09.003
 - Robinson et al., 2020, LIRICAL: https://doi.org/10.1016/j.ajhg.2020.06.021
 - HPO 2024: https://pmc.ncbi.nlm.nih.gov/articles/PMC10767975/
+
+## Verified external RareBench evaluation
+
+A GitHub Actions run successfully evaluated **178 eligible externally sourced patient cases** (LIRICAL 143, MME 11, HMS 24). Overall Top-1 / Top-5 results: exact overlap **37.64% / 54.49%**, Random Forest **32.58% / 40.45%**, TF-IDF **30.34% / 43.26%**, and Logistic Regression **27.53% / 46.07%**. Exact overlap performed best overall. This is a retrospective benchmark, **not clinical validation**, and no identical-case DeepRare predictions were available.
+
+- [Verified run and downloadable results](https://github.com/uday8116/RareGenXAI/actions/runs/43485509434)
+- [Final technical report](docs/FINAL_PROJECT_REPORT.md)
+- [Full cohort metrics](docs/VERIFIED_EXTERNAL_RESULTS.md)
+- [DeepRare comparison limitations](docs/DEEPRARE_MATCHED_COMPARISON.md)
+- [Web deployment guide](docs/WEB_DEPLOYMENT.md)
 
 ## Next research steps
 1. Validate the HPO annotation schema and freeze a release.
