@@ -24,7 +24,7 @@ jobs:
       - name: Train ML models on synthetic disease profiles
         run: python -m src.train_ml --train-diseases 200 --test-diseases 60 --queries-per-disease 2
       - name: Fetch published patient test cases
-        run: python -m src.rarebench --limit-per-subset 30
+        run: python -m src.rarebench --limit-per-subset 100000
       - name: Evaluate independent published cases
         run: python -m src.evaluate_external --cases data/external/rarebench_cases.csv --methods tfidf logistic random_forest overlap
       - name: Upload patient-level benchmark and provenance
