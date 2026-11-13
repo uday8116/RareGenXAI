@@ -31,12 +31,14 @@ def test_train_and_rank():
     details, summary, meta = ml.train(seed=7, train_diseases=12, test_diseases=4,
                                       queries_per_disease=1, candidates=12)
     assert meta["heldout_diseases"] == 4
-    assert len(details) == 4 * 4 * 3
-    assert len(summary) == 12
+    assert len(details) == 4 * 4 * 5
+    assert len(summary) == 20
     assert all(0 <= x["top1"] <= 1 for x in summary)
-    assert set(ml.models) == {"logistic", "random_forest"}
+    assert set(ml.models) == {"logistic", "random_forest", "xgboost", "mlp"}
     query = synthetic_observations("D0", PROFILES, random.Random(5))
     assert ml.rank(query, model="random_forest", top_k=5)
+    assert ml.rank(query, model="xgboost", top_k=5)
+    assert ml.rank(query, model="mlp", top_k=5)
 
 
 def test_absent_feature_does_not_equal_unknown():
