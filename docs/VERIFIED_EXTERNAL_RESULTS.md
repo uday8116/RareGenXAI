@@ -1,41 +1,50 @@
-# VERIFIED external patient-case benchmark — initial pilot
+# VERIFIED full RareBench patient-case benchmark
 
-## Source and execution
-- Dataset: RareBench public LIRICAL, MME, HMS cohorts, original published archive.
-- Workflow: https://github.com/uday8116/RareGenXAI/actions/runs/43485166485
-- Commit: 4e1add8bb64db7db5e815d27b89bdd3a10778580
-- Status: completed successfully, including data download, conversion, training, evaluation and artifact upload.
-- Source CSV SHA-256: 54aa12aaee42a7b68b6e7ad84a6b25b44142babeecc21b41061a2d165a00532a
-- Sampling: first 30 rows of each cohort, then eligibility filter (at least three valid HPO IDs and exactly one diagnosis). **This is a pilot, not the full benchmark.**
-- Cohort eligible counts: LIRICAL 8/30, MME 9/30, HMS 8/30, total 25/90.
-- All 25 recorded disease IDs were found in the disease knowledge base (coverage 100%).
+## Execution and provenance
+- GitHub Actions run: https://github.com/uday8116/RareGenXAI/actions/runs/43485509434
+- Run conclusion: **success**, verified from GitHub workflow and logs.
+- Commit: 527135707718079e75a0cc448626d002eca6b37a
+- Public RareBench LIRICAL, MME and HMS original cohorts; all rows inspected.
+- Eligibility: at least three valid HPO terms and exactly one diagnosis; no selection by model accuracy.
+- Eligible total **178**: LIRICAL **143**, MME **11**, HMS **24**.
+- Disease-ID coverage: **177/178 = 99.44%**.
+- Derived case CSV SHA-256: `7976df1ec8159c24b5dae8db2bd3e598547ef81421acdc901f5b095938761ddd`.
+- Patient-level results and cohort summary: download `external-patient-benchmark` artifact from the linked GitHub run.
 
-## Results (n=25 for each method)
-| Method | Top-1 | Top-5 | MRR | Disease coverage |
-|---|---:|---:|---:|---:|
-| Logistic Regression | 36% | 52% | 0.4252 | 100% |
-| Random Forest | 36% | 48% | 0.4155 | 100% |
-| Exact phenotype overlap | 36% | 52% | 0.4313 | 100% |
-| TF-IDF | 28% | 52% | 0.3870 | 100% |
+## Overall metrics (178 cases)
+| Method | Top-1 | Top-5 | MRR |
+|---|---:|---:|---:|
+| Exact overlap | 37.64% | 54.49% | 0.4529 |
+| Random Forest | 32.58% | 40.45% | 0.3759 |
+| TF-IDF | 30.34% | 43.26% | 0.3662 |
+| Logistic Regression | 27.53% | 46.07% | 0.3659 |
 
-These figures are transcribed from the successful workflow logs. Download the patient-level CSV from the workflow artifact to audit each rank and subgroup.
+## Cohort-specific Top-1 / Top-5 / MRR
+| Cohort | N | Method | Top-1 | Top-5 | MRR |
+|---|---:|---|---:|---:|---:|
+| LIRICAL | 143 | Exact overlap | 41.26% | 59.44% | 0.4939 |
+| LIRICAL | 143 | Random Forest | 35.66% | 44.06% | 0.4094 |
+| LIRICAL | 143 | TF-IDF | 32.87% | 46.15% | 0.3935 |
+| LIRICAL | 143 | Logistic Regression | 28.67% | 47.55% | 0.3808 |
+| MME | 11 | Exact overlap | 72.73% | 90.91% | 0.8032 |
+| MME | 11 | Random Forest | 63.64% | 81.82% | 0.7321 |
+| MME | 11 | TF-IDF | 54.55% | 81.82% | 0.6732 |
+| MME | 11 | Logistic Regression | 63.64% | 81.82% | 0.7197 |
+| HMS | 24 | Exact overlap | 0.00% | 8.33% | 0.0480 |
+| HMS | 24 | Random Forest | 0.00% | 0.00% | 0.0132 |
+| HMS | 24 | TF-IDF | 4.17% | 8.33% | 0.0627 |
+| HMS | 24 | Logistic Regression | 4.17% | 20.83% | 0.1148 |
 
 ## Interpretation
-On this small pilot, Logistic Regression and Exact Overlap tied at Top-1 and Top-5. Exact Overlap had the highest MRR. The results **do not establish** that ML outperforms the simpler baseline.
+Exact overlap led on overall Top-1, Top-5, and MRR. ML reranking did not beat this baseline in the full external benchmark. HMS performance was notably weak across all methods and deserves error analysis. Cohort sizes differ substantially; overall results are dominated by LIRICAL.
 
-## Research limitations
-- Cases are externally sourced but disease knowledge is built from HPO annotations, which may contain overlapping publications.
-- Synthetic HPO disease-profile queries were used for model training. These external cases were not used to fit the models in this run.
-- The 25 cases were filtered by available phenotype and diagnosis fields; findings may not generalize to excluded cases.
-- Small sample, no confidence intervals, no cross-cohort or independent hospital validation.
-- This run did not compare with DeepRare on matched cases.
-- The raw source archive was downloaded and a SHA-256 was recorded for the derived CSV; data licensing must be reviewed before public redistribution.
-- Do not call these results prospective clinical validation.
+## Limitations
+These are retrospectively curated external cases, **not prospective hospital validation**. The ranking knowledge base uses public HPO disease annotations that may overlap published cases. No DeepRare predictions were run on the same cases. The ML models were trained on synthetic HPO-derived observations. Dataset eligibility filtering excluded cases with fewer than three HPO terms or ambiguous/multiple diagnosis fields. No confidence intervals or statistical significance testing were conducted. The run did not include the ontology-semantic baseline because of compute cost.
 
-## Reproduce
+## Reproduction
 ```bash
 python -m src.data
 python -m src.train_ml --train-diseases 200 --test-diseases 60 --queries-per-disease 2
-python -m src.rarebench --limit-per-subset 30
+python -m src.rarebench --limit-per-subset 100000
 python -m src.evaluate_external --cases data/external/rarebench_cases.csv --methods tfidf logistic random_forest overlap
 ```
