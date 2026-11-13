@@ -10,7 +10,7 @@ on:
 jobs:
   gnn_pilot:
     runs-on: ubuntu-latest
-    timeout-minutes: 55
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -26,16 +26,16 @@ jobs:
         run: python -m src.data
       - name: Prepare published patient cases
         run: python -m src.rarebench --limit-per-subset 100000
-      - name: Run initial GNN patient-case pilot
+      - name: Run full 178-case GNN patient benchmark
         env:
           OMP_NUM_THREADS: '2'
           MKL_NUM_THREADS: '2'
-        run: python -m src.evaluate_gnn --train-diseases 8 --epochs 1 --max-cases 12
+        run: python -m src.evaluate_gnn --train-diseases 100 --epochs 3
       - name: Upload GNN pilot metrics
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: gnn-pilot-results
+          name: gnn-full-benchmark-results
           path: |
             results/gnn_external_summary.json
             results/gnn_external_cases.csv
