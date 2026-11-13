@@ -56,13 +56,15 @@ for i, (hp, status) in enumerate(st.session_state.observations):
     if col2.button("Remove", key=f"remove_{hp}"):
         st.session_state.observations.pop(i)
         st.rerun()
-method = st.selectbox("Ranking method", ["semantic", "overlap", "tfidf", "logistic", "random_forest"],
+method = st.selectbox("Ranking method", ["semantic", "overlap", "tfidf", "logistic", "random_forest", "xgboost", "mlp"],
                       format_func=lambda name: {
                           "semantic": "HPO Semantic Similarity",
                           "overlap": "Exact Phenotype Overlap",
                           "tfidf": "TF-IDF Retrieval",
                           "logistic": "Logistic Regression Reranking",
                           "random_forest": "Random Forest Reranking",
+                          "xgboost": "XGBoost Reranking",
+                          "mlp": "MLP Neural Network Reranking",
                       }[name])
 quality = st.checkbox("Use proposed evidence-quality weights", value=True,
                       disabled=method not in ("semantic", "overlap"))
@@ -82,7 +84,7 @@ if st.button("Rank candidate disorders", type="primary"):
             results = rank(observations, profiles, parents, ic, data["labels"], method, quality, top_k=5)
         else:
             ml = ml_resources()
-            if method in ("logistic", "random_forest") and method not in ml.models:
+            if method in ("logistic", "random_forest", "xgboost", "mlp") and method not in ml.models:
                 st.error("Train the ML models first: python -m src.train_ml")
                 st.stop()
             results = ml.rank(observations, model=method, k=40, top_k=5)
