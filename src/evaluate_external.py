@@ -39,7 +39,7 @@ def main():
     parser.add_argument("--cases", required=True)
     parser.add_argument("--deeprare", default=None, help="Optional independent DeepRare predictions, same cases")
     parser.add_argument("--out", default="results/external_case_results.csv")
-    parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "overlap", "semantic", "quality_semantic"])
+    parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap", "semantic", "quality_semantic"])
     parser.add_argument("--max-cases", type=int, default=0)
     args = parser.parse_args()
     cases = read_cases(args.cases)
@@ -66,7 +66,7 @@ def main():
             raise ValueError(f"Case {case['case_id']} has no HPO IDs")
         obs = [(t, "confirmed_present") for t in terms]
         for method in args.methods:
-            if method in ("tfidf", "logistic", "random_forest"):
+            if method in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
                 if method != "tfidf" and method not in ml.models:
                     continue
                 rows = ml.rank(obs, model=method, k=40)
