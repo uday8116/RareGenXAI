@@ -5,6 +5,7 @@ Unknown observations are ignored. Suspected positive findings have lower weight.
 The absence penalty applies only to explicitly confirmed-absent findings.
 """
 from collections import Counter
+from functools import lru_cache
 import math
 
 def ancestors(term, parents):
@@ -67,6 +68,24 @@ def rank(observations, profiles, parents, ic, labels=None, method="semantic", qu
                       for _, s in observations if s != "unknown" and (quality or s.endswith("present")))
     if denominator == 0:
         return []
+    @lru_cache(maxsize=None)
+    def cached_ancestors(term):
+        return frozenset(ancestors(term, parents))
+
+    @lru_cache(maxsize=250000)
+    def cached_semantic(a, b):
+        common = cached_ancestors(a) & cached_ancestors(b)
+        mica = max((ic.get(t, 0.0) for t in common), default=0.0)
+        denom = max(ic.get(a, 0.0), ic.get(b, 0.0), 1e-9)
+        return min(1.0, mica / denom)
+
+    def match_profile(term, disease_terms):
+        if not disease_terms:
+            return 0.0
+        if method == "overlap":
+            return float(term in disease_terms)
+        return max(cached_semantic(term, candidate) for candidate in disease_terms)
+
     results = []
     for disease, disease_terms in profiles.items():
         evidence = []
@@ -74,7 +93,7 @@ def rank(observations, profiles, parents, ic, labels=None, method="semantic", qu
             weight = WEIGHTS[status] if quality else (1.0 if status.endswith("present") else 0.0)
             if not weight:
                 continue
-            match = similarity_to_profile(term, disease_terms, parents, ic, method)
+            match = match_profile(term, disease_terms)
             contribution = weight * match / denominator
             evidence.append({"hpo_id": term, "status": status, "match": round(match, 4),
                              "contribution": round(contribution, 6)})
