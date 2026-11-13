@@ -14,7 +14,7 @@ path = Path("data/processed/profiles.json")
 if not path.exists():
     st.info("Preparing official HPO research data for first use. This may take several minutes.")
     try:
-        from src.data import main as prepare_data
+        from src.data import prepare as prepare_data
         with st.spinner("Downloading and parsing HPO files..."):
             prepare_data()
     except Exception as exc:
