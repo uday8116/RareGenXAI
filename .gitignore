@@ -225,3 +225,7 @@ data/processed/
 results/*.csv
 results/*.png
 .DS_Store
+
+# Locally trained models and metadata
+models/
+results/*.json
