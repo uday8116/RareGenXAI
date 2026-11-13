@@ -39,8 +39,12 @@ def main():
     parser.add_argument("--cases", required=True)
     parser.add_argument("--deeprare", default=None, help="Optional independent DeepRare predictions, same cases")
     parser.add_argument("--out", default="results/external_case_results.csv")
+    parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "overlap", "semantic", "quality_semantic"])
+    parser.add_argument("--max-cases", type=int, default=0)
     args = parser.parse_args()
     cases = read_cases(args.cases)
+    if args.max_cases > 0:
+        cases = cases[:args.max_cases]
     data = json.loads(Path("data/processed/profiles.json").read_text())
     profiles = {k: set(v) for k, v in data["profiles"].items()}
     labels = data["labels"]
@@ -52,15 +56,16 @@ def main():
             comparison = {r["case_id"]: r["ranked_disease_ids"].split(";") for r in csv.DictReader(f)}
         if set(comparison) != {r["case_id"] for r in cases}:
             raise ValueError("DeepRare case IDs must match exactly; no unmatched comparison allowed")
-    parents = ontology_parents(load_ontology())
-    ic = information_content(profiles, parents)
+    needs_ontology = any(m in args.methods for m in ("semantic", "quality_semantic"))
+    parents = ontology_parents(load_ontology()) if needs_ontology else {}
+    ic = information_content(profiles, parents) if needs_ontology else {}
     records = []
     for case in cases:
         terms = [x.strip() for x in case["hpo_ids"].split(";") if x.strip()]
         if not terms:
             raise ValueError(f"Case {case['case_id']} has no HPO IDs")
         obs = [(t, "confirmed_present") for t in terms]
-        for method in ("tfidf", "logistic", "random_forest", "overlap", "semantic", "quality_semantic"):
+        for method in args.methods:
             if method in ("tfidf", "logistic", "random_forest"):
                 if method != "tfidf" and method not in ml.models:
                     continue
@@ -71,15 +76,17 @@ def main():
                             quality=(method == "quality_semantic"), top_k=len(profiles))
             ids = [row["disease_id"] for row in rows]
             position = score_rank(ids, case["disease_id"])
+            known = int(case["disease_id"] in profiles)
             records.append({"case_id": case["case_id"], "method": method,
-                            "true_disease_id": case["disease_id"],
+                            "true_disease_id": case["disease_id"], "known_disease": known,
                             "rank": position or "", "top1": int(position == 1),
                             "top5": int(position is not None and position <= 5),
                             "reciprocal_rank": 1 / position if position else 0})
         if comparison:
             position = score_rank(comparison[case["case_id"]], case["disease_id"])
             records.append({"case_id": case["case_id"], "method": "DeepRare_external",
-                            "true_disease_id": case["disease_id"], "rank": position or "",
+                            "true_disease_id": case["disease_id"], "known_disease": known,
+                            "rank": position or "",
                             "top1": int(position == 1),
                             "top5": int(position is not None and position <= 5),
                             "reciprocal_rank": 1 / position if position else 0})
@@ -94,7 +101,8 @@ def main():
         print(method, "n=", len(subset),
               "Top1=", round(sum(r["top1"] for r in subset) / len(subset), 4),
               "Top5=", round(sum(r["top5"] for r in subset) / len(subset), 4),
-              "MRR=", round(sum(r["reciprocal_rank"] for r in subset) / len(subset), 4))
+              "MRR=", round(sum(r["reciprocal_rank"] for r in subset) / len(subset), 4),
+              "disease_coverage=", round(sum(r["known_disease"] for r in subset) / len(subset), 4))
     print("Patient-level external validation only if the supplied cases are independently sourced.")
 
 
