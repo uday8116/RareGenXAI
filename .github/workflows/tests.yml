@@ -18,6 +18,8 @@ jobs:
         run: python -m pytest -q
       - name: Download and validate official HPO data
         run: python -m src.data
+      - name: Train and evaluate ML reranking models
+        run: python -m src.train_ml --train-diseases 120 --test-diseases 30 --queries-per-disease 1 --candidates 25
       - name: Streamlit integration test with official HPO data
         run: python -m pytest -q tests/test_app_integration.py
       - name: Run reproducible synthetic benchmark
@@ -35,4 +37,5 @@ jobs:
             data/raw/manifest.json
             results/*.csv
             results/*.png
+            results/*.json
           if-no-files-found: warn
