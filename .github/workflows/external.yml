@@ -1,0 +1,39 @@
+name: External RareBench Patient Evaluation
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'src/rarebench.py'
+      - 'src/evaluate_external.py'
+      - 'src/ml.py'
+      - 'src/train_ml.py'
+      - '.github/workflows/external.yml'
+jobs:
+  patient_benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Prepare official HPO annotations
+        run: python -m src.data
+      - name: Train ML models on synthetic disease profiles
+        run: python -m src.train_ml --train-diseases 200 --test-diseases 60 --queries-per-disease 2
+      - name: Fetch published patient test cases
+        run: python -m src.rarebench --limit-per-subset 30
+      - name: Evaluate independent published cases
+        run: python -m src.evaluate_external --cases data/external/rarebench_cases.csv --methods tfidf logistic random_forest overlap
+      - name: Upload patient-level benchmark and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: external-patient-benchmark
+          path: |
+            data/external/rarebench_manifest.json
+            results/external_case_results.csv
+            results/ml_summary.csv
+          if-no-files-found: warn
