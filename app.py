@@ -12,8 +12,18 @@ st.title("🧬 RareGen XAI")
 st.caption("Research demonstration only. Not a diagnostic device; scores are NOT disease probabilities.")
 path = Path("data/processed/profiles.json")
 if not path.exists():
-    st.error("Dataset not prepared. Run: python -m src.data")
-    st.stop()
+    st.info("Preparing official HPO research data for first use. This may take several minutes.")
+    try:
+        from src.data import main as prepare_data
+        with st.spinner("Downloading and parsing HPO files..."):
+            prepare_data()
+    except Exception as exc:
+        st.error("Automatic preparation failed. Run: python -m src.data")
+        st.caption(str(exc))
+        st.stop()
+    if not path.exists():
+        st.error("Dataset preparation did not produce profiles.json.")
+        st.stop()
 
 @st.cache_resource
 def resources():
