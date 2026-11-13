@@ -6,6 +6,7 @@ on:
       - 'src/rarebench.py'
       - 'src/evaluate_external.py'
       - 'src/ml.py'
+      - 'src/paired_stats.py'
       - 'src/train_ml.py'
       - '.github/workflows/external.yml'
 jobs:
@@ -27,6 +28,8 @@ jobs:
         run: python -m src.rarebench --limit-per-subset 100000
       - name: Evaluate independent published cases
         run: python -m src.evaluate_external --cases data/external/rarebench_cases.csv --methods tfidf logistic random_forest xgboost mlp overlap
+      - name: Compute paired bootstrap confidence intervals
+        run: python -m src.paired_stats
       - name: Upload patient-level benchmark and provenance
         if: always()
         uses: actions/upload-artifact@v4
@@ -36,5 +39,6 @@ jobs:
             data/external/rarebench_manifest.json
             results/external_case_results.csv
             results/external_cohort_summary.csv
+            results/external_paired_bootstrap.csv
             results/ml_summary.csv
           if-no-files-found: warn
