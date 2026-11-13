@@ -77,14 +77,14 @@ def main():
             ids = [row["disease_id"] for row in rows]
             position = score_rank(ids, case["disease_id"])
             known = int(case["disease_id"] in profiles)
-            records.append({"case_id": case["case_id"], "method": method,
+            records.append({"case_id": case["case_id"], "cohort": case.get("cohort", "unspecified"), "method": method,
                             "true_disease_id": case["disease_id"], "known_disease": known,
                             "rank": position or "", "top1": int(position == 1),
                             "top5": int(position is not None and position <= 5),
                             "reciprocal_rank": 1 / position if position else 0})
         if comparison:
             position = score_rank(comparison[case["case_id"]], case["disease_id"])
-            records.append({"case_id": case["case_id"], "method": "DeepRare_external",
+            records.append({"case_id": case["case_id"], "cohort": case.get("cohort", "unspecified"), "method": "DeepRare_external",
                             "true_disease_id": case["disease_id"], "known_disease": known,
                             "rank": position or "",
                             "top1": int(position == 1),
@@ -96,6 +96,26 @@ def main():
         writer = csv.DictWriter(f, fieldnames=list(records[0]))
         writer.writeheader()
         writer.writerows(records)
+    summary = []
+    for cohort in ["ALL"] + sorted({r["cohort"] for r in records}):
+        for method in sorted({r["method"] for r in records}):
+            subset = [r for r in records if r["method"] == method and
+                      (cohort == "ALL" or r["cohort"] == cohort)]
+            if not subset:
+                continue
+            n = len(subset)
+            summary.append({"cohort": cohort, "method": method, "n": n,
+                            "top1": sum(r["top1"] for r in subset) / n,
+                            "top5": sum(r["top5"] for r in subset) / n,
+                            "mrr": sum(r["reciprocal_rank"] for r in subset) / n,
+                            "disease_coverage": sum(r["known_disease"] for r in subset) / n})
+    summary_path = output.with_name("external_cohort_summary.csv")
+    with summary_path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(summary[0]))
+        writer.writeheader()
+        writer.writerows(summary)
+    for row in summary:
+        print(row)
     for method in sorted({r["method"] for r in records}):
         subset = [r for r in records if r["method"] == method]
         print(method, "n=", len(subset),
