@@ -12,6 +12,8 @@ import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
+from sklearn.neural_network import MLPClassifier
+from xgboost import XGBClassifier
 
 STATUSES = {"confirmed_present", "suspected_present", "confirmed_absent", "unknown"}
 FEATURES = ["tfidf", "confirmed_recall", "suspected_recall", "disease_coverage",
@@ -89,6 +91,8 @@ class RareGenML:
         self.models["random_forest"] = RandomForestClassifier(
             n_estimators=80, max_depth=9, min_samples_leaf=2, n_jobs=1,
             class_weight="balanced_subsample", random_state=seed)
+        self.models["xgboost"] = XGBClassifier(n_estimators=80, max_depth=4, learning_rate=0.07, subsample=0.85, colsample_bytree=0.9, objective="binary:logistic", eval_metric="logloss", n_jobs=1, random_state=seed)
+        self.models["mlp"] = MLPClassifier(hidden_layer_sizes=(32, 16), activation="relu", alpha=0.01, max_iter=350, early_stopping=False, random_state=seed)
         for model in self.models.values():
             model.fit(x, y)
 
@@ -123,7 +127,7 @@ class RareGenML:
         for disease in heldout:
             for missing in (0.0, 0.2, 0.4, 0.6):
                 observations = synthetic_observations(disease, self.profiles, rng, missing=missing)
-                for method in ("tfidf", "logistic", "random_forest"):
+                for method in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
                     rows = self.rank(observations, model=method, k=candidates)
                     position = next((i for i, row in enumerate(rows, 1) if row["disease_id"] == disease), None)
                     details.append({"disease": disease, "missing_rate": missing, "method": method,
@@ -133,7 +137,7 @@ class RareGenML:
                                     "retrieved": int(position is not None)})
         summary = []
         for missing in (0.0, 0.2, 0.4, 0.6):
-            for method in ("tfidf", "logistic", "random_forest"):
+            for method in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
                 subset = [row for row in details if row["method"] == method and row["missing_rate"] == missing]
                 summary.append({"method": method, "missing_rate": missing, "n": len(subset),
                                 "top1": float(np.mean([v["top1"] for v in subset])),
@@ -152,7 +156,7 @@ class RareGenML:
         return float((self.matrix[self.index[disease]] @ query.T).toarray()[0, 0])
 
     def rank(self, observations, model="tfidf", k=40, top_k=None):
-        if model not in ("tfidf", "logistic", "random_forest"):
+        if model not in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
             raise ValueError("Unknown ML model: " + model)
         found = self.retrieve(observations, k=k)
         if not found:
