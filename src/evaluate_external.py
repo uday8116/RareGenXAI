@@ -12,19 +12,7 @@ import joblib
 from src.ml import RareGenML
 from src.ranking import ontology_parents, information_content, rank
 from src.data import load_ontology
-
-
-def read_cases(path):
-    with open(path, newline="") as f:
-        rows = list(csv.DictReader(f))
-    if not rows:
-        raise ValueError("No cases found")
-    required = {"case_id", "disease_id", "hpo_ids"}
-    if not required.issubset(rows[0]):
-        raise ValueError(f"Required columns: {sorted(required)}")
-    if len({r["case_id"] for r in rows}) != len(rows):
-        raise ValueError("Duplicate case IDs")
-    return rows
+from src.external_validation import read_cases, read_matched_predictions
 
 
 def score_rank(ids, target):
@@ -52,10 +40,7 @@ def main():
     ml = joblib.load(ml_path) if ml_path.exists() else RareGenML(profiles, labels)
     comparison = {}
     if args.deeprare:
-        with open(args.deeprare, newline="") as f:
-            comparison = {r["case_id"]: r["ranked_disease_ids"].split(";") for r in csv.DictReader(f)}
-        if set(comparison) != {r["case_id"] for r in cases}:
-            raise ValueError("DeepRare case IDs must match exactly; no unmatched comparison allowed")
+        comparison = read_matched_predictions(args.deeprare, {r["case_id"] for r in cases})
     needs_ontology = any(m in args.methods for m in ("semantic", "quality_semantic"))
     parents = ontology_parents(load_ontology()) if needs_ontology else {}
     ic = information_content(profiles, parents) if needs_ontology else {}
