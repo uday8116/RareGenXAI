@@ -18,8 +18,12 @@ jobs:
         run: python -m pytest -q
       - name: Download and validate official HPO data
         run: python -m src.data
+      - name: Verify downloaded HPO checksums and processed profiles
+        run: python scripts/doctor.py --require-data
       - name: Train and evaluate ML reranking models
         run: python -m src.train_ml --train-diseases 120 --test-diseases 30 --queries-per-disease 1 --candidates 25
+      - name: Verify local ML model artifact was generated
+        run: python scripts/doctor.py --require-data --require-model
       - name: Streamlit integration test with official HPO data
         run: python -m pytest -q tests/test_app_integration.py
       - name: Run reproducible synthetic benchmark
