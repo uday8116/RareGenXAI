@@ -19,7 +19,7 @@ A reproducible **research prototype** that prioritizes candidate rare diseases u
 
 The first phase provides a repeatable local setup and diagnostic toolchain. It **does not** yet install the planned React/FastAPI application or provide newly trained models.
 
-On macOS, install Python 3.11 (recommended), Git, and optionally Node.js (needed for the later React phase). With Homebrew: `brew install python@3.11 git node`. Then:
+On macOS, install native Python 3.11 (recommended), Git, Homebrew OpenMP (`libomp`) for XGBoost, and optionally Node.js (needed for the later React phase). With Homebrew: `brew install python@3.11 git node libomp` (the bootstrap can also install missing `libomp` automatically). Then:
 
 ```bash
 git clone https://github.com/uday8116/RareGenXAI.git

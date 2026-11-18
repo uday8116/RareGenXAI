@@ -6,7 +6,7 @@ This guide sets up the **existing** Streamlit research prototype. The proposed R
 
 - Mac with Apple Silicon and preferably 25 GB or more free SSD space.
 - macOS Terminal, Git, Python **3.11** (preferred) or **3.12**.
-- Homebrew is convenient but optional: https://brew.sh
+- Homebrew (native Apple Silicon installation under `/opt/homebrew`) is needed to provide `libomp` for XGBoost: https://brew.sh
 - Node.js and npm are optional for Phase 1, but are needed when the React frontend begins.
 - VS Code or another editor, working internet for first HPO download, access to this private repository.
 - **Do not input identifiable patient records.** This is a research-only ranking tool, not a diagnostic service.
@@ -26,7 +26,7 @@ node --version       # Optional until frontend work
 If command-line tools are missing, run `xcode-select --install`. If using Homebrew:
 
 ```bash
-brew install python@3.11 git node
+brew install python@3.11 git node libomp
 ```
 
 Check `python3.11 --version` after installation. The Python dependencies are installed inside the project virtual environment, not globally. Avoid `sudo pip install`.
@@ -48,7 +48,7 @@ bash scripts/verify_local.sh
 .venv/bin/python scripts/doctor.py --json
 ```
 
-Bootstrap chooses a native arm64 `python3.11` or `python3.12`, creates `.venv`, installs `requirements.txt`, writes a Git-ignored `environment-local.txt` with exact installed versions, and runs the doctor. If an existing `.venv` has an incompatible Python version or architecture, bootstrap stops with a message rather than modifying it. Bootstrap does not train ML models or fetch medical data unless requested. The doctor examines version, importable packages (including binary library load failures), command-line tools, free storage, and model-artifact presence. When HPO files exist it checks manifest SHA-256 and lengths, the HPOA header, and the parsed profile structure. It **does not** validate the contents of a trained model or the clinical meaning of data.
+Bootstrap chooses a native arm64 `python3.11` or `python3.12`, checks for Homebrew's `libomp` OpenMP library (and runs `brew install libomp` with a visible message if it is missing), creates `.venv`, installs `requirements.txt`, writes a Git-ignored `environment-local.txt` with exact installed versions, and runs the doctor. If an existing `.venv` has an incompatible Python version or architecture, bootstrap stops with a message rather than modifying it. Bootstrap does not train ML models or fetch medical data unless requested. The doctor examines version, importable packages (including binary library load failures), command-line tools, free storage, and model-artifact presence. When HPO files exist it checks manifest SHA-256 and lengths, the HPOA header, and the parsed profile structure. It **does not** validate the contents of a trained model or the clinical meaning of data.
 
 The quick verification runs environment checks and selected deterministic project tests without downloading HPO. The standard full-project GitHub workflow and the new native Apple Silicon CI smoke-test are separate from the checks on your physical laptop.
 
@@ -85,7 +85,7 @@ Only run the training command **after** preparing HPO data and selecting the pla
 - `python3.11: command not found`: ensure Python 3.11 is installed and your shell PATH is updated, then open a new Terminal window.
 - Wrong Python or architecture in `.venv`: after backing up any important local changes, run `rm -rf .venv` **only from the RareGenXAI project root**, then rerun the bootstrap. Do not delete `data/` or `models/` when resetting Python.
 - `ModuleNotFoundError`: rerun bootstrap and use `.venv/bin/python`, rather than the system Python.
-- XGBoost shared library / `libomp` error on Apple Silicon: if it occurs, try `brew install libomp` and reinstall affected Python dependencies. Do not install this unless the error happens.
+- XGBoost shared library / `libomp` error on Apple Silicon: run `brew install libomp` and retry the bootstrap. The bootstrap checks the native OpenMP library before pip installation, because earlier CI exposed this missing runtime. Do not install x86 Homebrew under Rosetta.
 - HPO download error: verify internet access and official source URLs in `src/data.py`. Never replace failed downloads with fabricated data.
 - `--full` reports missing HPO: run `bash scripts/bootstrap_macos.sh --data` first.
 - Low memory: stop other resource-heavy applications, use one training process at a time, and avoid a full GNN experiment during bootstrap.

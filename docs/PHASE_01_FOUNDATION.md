@@ -74,3 +74,7 @@ Design a local SQLite schema with stable IDs, foreign keys and migrations; inges
 The first CI run was green, but the audit found that the doctor only verified data file presence and the workflow checked macOS shell syntax without executing a native install. This branch now adds streaming SHA-256 checks against the downloaded manifest, HPOA/JSON structure checks, native arm64 and virtualenv preflight, actual Python module imports, version snapshot ignored by Git, deterministic tests for corrupted data, and a macOS arm64 bootstrap CI job. Local data, generated SQLite files and the machine-specific dependency snapshot are excluded from Git.
 
 These checks verify an environment and **data packaging integrity**, not medical annotation correctness, calibrated model scores, or independent clinical validation. The final user-machine verification gates remain the owner's responsibility, because GitHub cannot inspect or operate their physical Mac.
+
+### Native macOS bootstrap failure discovered during review
+
+The expanded macOS arm64 CI initially failed during the real bootstrap: importing XGBoost raised `XGBoostError: libomp.dylib could not be loaded`. This is a missing Homebrew OpenMP runtime, not a Python installation error. The bootstrap now checks for the native `/opt/homebrew/opt/libomp/lib/libomp.dylib` and visibly installs `libomp` through Homebrew when necessary. The macOS CI job exercises this exact path. Verify the latest CI run before marking the issue fixed.

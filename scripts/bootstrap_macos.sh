@@ -41,6 +41,22 @@ if [[ -z "$PYTHON" ]]; then
 fi
 echo "Using $("$PYTHON" --version) (arm64)"
 
+# XGBoost on Apple Silicon links against the Homebrew OpenMP runtime.
+# Install this once, with a visible message, rather than shipping a broken model.
+if [[ ! -f "/opt/homebrew/opt/libomp/lib/libomp.dylib" ]]; then
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "XGBoost requires libomp. Install Homebrew (https://brew.sh), then run: brew install libomp" >&2
+    exit 1
+  fi
+  echo "Installing required native OpenMP runtime for XGBoost: brew install libomp"
+  brew install libomp
+fi
+if [[ ! -f "/opt/homebrew/opt/libomp/lib/libomp.dylib" ]]; then
+  echo "OpenMP runtime not found at /opt/homebrew/opt/libomp/lib/libomp.dylib." >&2
+  echo "Check that Homebrew is installed natively under /opt/homebrew." >&2
+  exit 1
+fi
+
 if [[ ! -f ".venv/pyvenv.cfg" ]]; then
   "$PYTHON" -m venv .venv
 fi
