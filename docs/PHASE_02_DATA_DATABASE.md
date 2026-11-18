@@ -57,6 +57,61 @@ Disease IDs must match the identifiers in the downloaded file, including its pre
 
 SQLite foreign keys are enabled on writes and reads. Duplicate identical annotations collapse into one record, but distinct evidence/reference metadata is retained. The `NOT` qualifier becomes `is_negated=1` and is never turned into a positive phenotype. Unknown ontology IDs are counted; a build fails if more than 5% of input annotations are unmappable. Alternate HPO IDs resolve to canonical IDs; ambiguous aliases fail validation.
 
+
+### Relationship diagram
+
+```mermaid
+erDiagram
+    HPO_TERMS ||--o{ HPO_ALIASES : canonical
+    HPO_TERMS ||--o{ HPO_SYNONYMS : has
+    HPO_TERMS ||--o{ HPO_PARENTS : child
+    HPO_TERMS ||--o{ HPO_PARENTS : parent
+    DISEASES ||--o{ DISEASE_PHENOTYPES : annotated
+    HPO_TERMS ||--o{ DISEASE_PHENOTYPES : associated
+    DATA_SOURCES {
+      text filename PK
+      text source_url
+      text sha256
+      integer byte_count
+    }
+    HPO_TERMS {
+      text hpo_id PK
+      text name
+      text definition
+      integer is_obsolete
+    }
+    DISEASES {
+      text disease_id PK
+      text name
+    }
+    DISEASE_PHENOTYPES {
+      integer annotation_id PK
+      text disease_id FK
+      text hpo_id FK
+      integer is_negated
+      text evidence_code
+      text frequency
+    }
+```
+
+### Reproduced import snapshot (GitHub Actions, 2026-11-18)
+
+The dedicated full-source CI run https://github.com/uday8116/RareGenXAI/actions/runs/44237579185 downloaded the official files and successfully imported:
+
+| Count | Records |
+| --- | ---: |
+| HPO terms | 20,482 |
+| HPO aliases | 3,445 |
+| HPO synonyms | 26,268 |
+| Direct HPO is-a links | 24,436 |
+| Distinct annotated diseases | 12,879 |
+| Unique disease-phenotype/evidence records | 286,616 |
+| Explicit negative annotation records | 733 |
+| Input HPOA annotation rows | 286,649 |
+| Unmapped HPO annotation rows | 0 |
+
+These counts reflect the specific downloaded HPO/HPOA snapshot and are **not patient records**, model classification accuracy or independent clinical test data. The 33 fewer stored records compared with input rows reflect duplicate-key consolidation, rather than missing HPO IDs. A later download may produce different counts and checksums.
+
 ## 5. Read-only access for later models / FastAPI
 
 ```python
