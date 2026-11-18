@@ -6,7 +6,7 @@ import sqlite3
 import pytest
 
 from src.db_access import (
-    connect_readonly, disease_detail, load_ranking_inputs,
+    connect_readonly, open_readonly, disease_detail, load_ranking_inputs,
     phenotype, search_diseases, search_phenotypes, stats,
 )
 from src.knowledge_db import build_database, validate_connection, verify_sources
@@ -297,3 +297,26 @@ def test_v1_to_v2_schema_migration_preserves_existing_annotation(tmp_path):
         ).fetchone()[0] == 0  # source rows require --replace from official HPO
     finally:
         conn.close()
+
+
+def test_readonly_context_always_closes_connection(sample):
+    raw, db = sample
+    build_database(raw, db)
+    with open_readonly(db) as connection:
+        assert search_phenotypes(connection, "Seizure")
+    with pytest.raises(sqlite3.ProgrammingError):
+        connection.execute("SELECT 1")
+
+
+def test_failed_strict_rebuild_preserves_existing_database(sample):
+    raw, db = sample
+    build_database(raw, db)
+    original = db.read_bytes()
+    file = raw / "phenotype.hpoa"
+    file.write_text(file.read_text().replace("\tHP:0001250\t", "\tHP:0999999\t", 1))
+    update_hpoa_manifest(raw)
+    with pytest.raises(ValueError, match="Unknown HPO term"):
+        build_database(raw, db, replace=True)
+    assert db.read_bytes() == original
+    with connect_readonly(db) as connection:
+        assert validate_connection(connection)["counts"]["hpoa_source_rows"] == 5
