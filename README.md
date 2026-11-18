@@ -94,3 +94,17 @@ A GitHub Actions run successfully evaluated **178 eligible externally sourced pa
 3. Compare against a published phenotype-ranking tool on matched inputs.
 4. Tune and test evidence-quality weights without leakage.
 5. Quantify uncertainty and explanation faithfulness before any clinical claims.
+
+## Phase 2: local HPO knowledge database
+
+Phase 2 provides a versioned, reproducible SQLite knowledge base using official HPO data. It stores **only disease/phenotype knowledge**, not identifiable patient records or diagnoses.
+
+```bash
+.venv/bin/python -m src.data
+.venv/bin/python -m src.knowledge_db build
+.venv/bin/python -m src.knowledge_db verify
+.venv/bin/python -m src.knowledge_db search-hpo "seizure"
+.venv/bin/python -m src.knowledge_db search-disease "Marfan"
+```
+
+Run `.venv/bin/python -m src.knowledge_db build --replace` to deliberately replace an existing local database after validation. The default database is `data/local/raregen.sqlite3` (ignored by Git). See [Phase 2 database and search documentation](docs/PHASE_02_DATA_DATABASE.md).

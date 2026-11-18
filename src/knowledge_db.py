@@ -181,6 +181,7 @@ def build_database(raw_dir: str | Path = DEFAULT_RAW, db_path: str | Path = DEFA
     conn = None
     try:
         conn = sqlite3.connect(staging)
+        conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys=ON")
         apply_migrations(conn)
         with conn:

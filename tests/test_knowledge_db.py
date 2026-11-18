@@ -83,8 +83,8 @@ def test_import_and_verify(sample):
         assert report["counts"]["negative_annotations"] == 1
         assert report["counts"]["hpo_parents"] >= 2
         assert report["metadata"]["unmapped_annotations"] == "0"
-        assert report["sources"][0]["sha256"] == verify_sources(raw)["hp.obo"]["sha256"] or (
-            report["sources"][1]["sha256"] == verify_sources(raw)["hp.obo"]["sha256"])
+        source_hashes = {s["filename"]: s["sha256"] for s in report["sources"]}
+        assert source_hashes["hp.obo"] == verify_sources(raw)["hp.obo"]["sha256"]
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
 
 
