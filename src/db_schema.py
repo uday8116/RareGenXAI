@@ -4,7 +4,7 @@ No patient records or identifiable clinical information are stored here.
 """
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 MIGRATIONS = {
     1: """
@@ -66,6 +66,59 @@ MIGRATIONS = {
     CREATE INDEX idx_disease_name ON diseases(name COLLATE NOCASE);
     CREATE INDEX idx_annotations_disease ON disease_phenotypes(disease_id);
     CREATE INDEX idx_annotations_hpo ON disease_phenotypes(hpo_id);
+    """,
+    2: """
+    -- Rebuild the compact annotation table so modifier/biocuration are part
+    -- of the deduplication key. Preserve rows from any existing v1 database.
+    CREATE TABLE disease_phenotypes_v2 (
+        annotation_id INTEGER PRIMARY KEY,
+        disease_id TEXT NOT NULL REFERENCES diseases(disease_id),
+        hpo_id TEXT NOT NULL REFERENCES hpo_terms(hpo_id),
+        is_negated INTEGER NOT NULL CHECK(is_negated IN (0,1)),
+        evidence_code TEXT NOT NULL DEFAULT '',
+        reference_id TEXT NOT NULL DEFAULT '',
+        frequency TEXT NOT NULL DEFAULT '',
+        onset TEXT NOT NULL DEFAULT '',
+        sex TEXT NOT NULL DEFAULT '',
+        modifier TEXT NOT NULL DEFAULT '',
+        aspect TEXT NOT NULL DEFAULT '',
+        biocuration TEXT NOT NULL DEFAULT '',
+        UNIQUE(disease_id,hpo_id,is_negated,evidence_code,reference_id,frequency,
+               onset,sex,modifier,aspect,biocuration)
+    );
+    INSERT INTO disease_phenotypes_v2 (
+        annotation_id,disease_id,hpo_id,is_negated,evidence_code,reference_id,
+        frequency,onset,sex,modifier,aspect,biocuration
+    )
+    SELECT annotation_id,disease_id,hpo_id,is_negated,evidence_code,reference_id,
+           frequency,onset,sex,'',aspect,''
+    FROM disease_phenotypes;
+    DROP TABLE disease_phenotypes;
+    ALTER TABLE disease_phenotypes_v2 RENAME TO disease_phenotypes;
+    CREATE INDEX idx_annotations_disease ON disease_phenotypes(disease_id);
+    CREATE INDEX idx_annotations_hpo ON disease_phenotypes(hpo_id);
+    CREATE INDEX idx_annotations_aspect ON disease_phenotypes(aspect);
+
+    -- Every input HPOA row is retained, including exact duplicates.
+    -- This is source-knowledge provenance, NOT individual patient data.
+    CREATE TABLE hpoa_source_rows (
+        row_number INTEGER PRIMARY KEY CHECK(row_number > 0),
+        disease_id TEXT NOT NULL REFERENCES diseases(disease_id),
+        disease_name TEXT NOT NULL,
+        raw_hpo_id TEXT NOT NULL,
+        hpo_id TEXT NOT NULL REFERENCES hpo_terms(hpo_id),
+        qualifier TEXT NOT NULL DEFAULT '',
+        reference_id TEXT NOT NULL DEFAULT '',
+        evidence_code TEXT NOT NULL DEFAULT '',
+        onset TEXT NOT NULL DEFAULT '',
+        frequency TEXT NOT NULL DEFAULT '',
+        sex TEXT NOT NULL DEFAULT '',
+        modifier TEXT NOT NULL DEFAULT '',
+        aspect TEXT NOT NULL DEFAULT '',
+        biocuration TEXT NOT NULL DEFAULT ''
+    );
+    CREATE INDEX idx_source_rows_disease ON hpoa_source_rows(disease_id);
+    CREATE INDEX idx_source_rows_hpo ON hpoa_source_rows(hpo_id);
     """,
 }
 

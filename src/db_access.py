@@ -6,6 +6,7 @@ Only public research knowledge is persisted; no patient records are accepted.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import quote
 
@@ -21,6 +22,16 @@ def connect_readonly(db_path: str | Path = DEFAULT_DB) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
     return conn
+
+
+@contextmanager
+def open_readonly(db_path: str | Path = DEFAULT_DB):
+    """Read-only connection that is always closed at context exit."""
+    connection = connect_readonly(db_path)
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def _limit(value: int) -> int:
@@ -47,46 +58,48 @@ def phenotype(conn: sqlite3.Connection, hpo_id: str) -> dict | None:
 
 
 def search_phenotypes(conn: sqlite3.Connection, query: str, limit: int = 20) -> list[dict]:
-    """Find exact IDs and common name prefixes first; then name/synonym matches."""
+    """Return canonical HPO IDs ranked by exact ID/alias/name/synonym then prefix.
+
+    Uses indexed lookups where possible; all input remains bound SQL parameters.
+    Exact synonym matches are not hidden behind alphabetically earlier prefixes.
+    """
     limit = _limit(limit)
+    if not isinstance(query, str):
+        raise ValueError("query must be text")
     query = query.strip()
     if not query:
         return []
     q = _pattern(query)
-    prefix = f"{q}%"
-    contains = f"%{q}%"
-    sql = """SELECT h.hpo_id,h.name,h.is_obsolete FROM hpo_terms h
-        WHERE h.hpo_id LIKE ? ESCAPE '!'
-           OR h.name LIKE ? ESCAPE '!' COLLATE NOCASE
-           OR EXISTS (SELECT 1 FROM hpo_aliases a WHERE a.hpo_id=h.hpo_id
-                      AND a.alias_id LIKE ? ESCAPE '!')
-           OR EXISTS (SELECT 1 FROM hpo_synonyms s WHERE s.hpo_id=h.hpo_id
-                      AND s.synonym LIKE ? ESCAPE '!' COLLATE NOCASE)
-        ORDER BY h.is_obsolete, CASE WHEN h.hpo_id=? THEN 0
-                                    WHEN lower(h.name)=lower(?) THEN 1
-                                    ELSE 2 END,
-                 h.name COLLATE NOCASE, h.hpo_id LIMIT ?"""
-    rows = conn.execute(sql, (prefix, prefix, prefix, prefix, query, query, limit)).fetchall()
-    found = {r["hpo_id"]: dict(r) for r in rows}
-    if len(found) < limit:
-        remaining = limit - len(found)
-        extras = conn.execute(
-            """SELECT h.hpo_id,h.name,h.is_obsolete FROM hpo_terms h
-               WHERE h.name LIKE ? ESCAPE '!' COLLATE NOCASE
-                  OR EXISTS (SELECT 1 FROM hpo_synonyms s WHERE s.hpo_id=h.hpo_id
-                             AND s.synonym LIKE ? ESCAPE '!' COLLATE NOCASE)
-               ORDER BY h.is_obsolete,h.name COLLATE NOCASE,h.hpo_id LIMIT ?""",
-            (contains, contains, limit + len(found)),
-        ).fetchall()
-        for row in extras:
-            if row["hpo_id"] not in found and remaining:
-                found[row["hpo_id"]] = dict(row)
-                remaining -= 1
-    return list(found.values())
+    prefix, contains = f"{q}%", f"%{q}%"
+    sql = """WITH matches AS (
+          SELECT hpo_id,0 AS priority FROM hpo_terms WHERE hpo_id=?
+          UNION ALL SELECT hpo_id,1 FROM hpo_aliases WHERE alias_id=?
+          UNION ALL SELECT hpo_id,2 FROM hpo_terms WHERE name=? COLLATE NOCASE
+          UNION ALL SELECT hpo_id,3 FROM hpo_synonyms WHERE synonym=? COLLATE NOCASE
+          UNION ALL SELECT hpo_id,4 FROM hpo_terms WHERE hpo_id LIKE ? ESCAPE '!'
+          UNION ALL SELECT hpo_id,5 FROM hpo_aliases WHERE alias_id LIKE ? ESCAPE '!'
+          UNION ALL SELECT hpo_id,6 FROM hpo_terms WHERE name LIKE ? ESCAPE '!' COLLATE NOCASE
+          UNION ALL SELECT hpo_id,7 FROM hpo_synonyms WHERE synonym LIKE ? ESCAPE '!' COLLATE NOCASE
+          UNION ALL SELECT hpo_id,8 FROM hpo_terms WHERE name LIKE ? ESCAPE '!' COLLATE NOCASE
+          UNION ALL SELECT hpo_id,9 FROM hpo_synonyms WHERE synonym LIKE ? ESCAPE '!' COLLATE NOCASE
+        )
+        SELECT h.hpo_id,h.name,h.is_obsolete
+        FROM hpo_terms h
+        JOIN (SELECT hpo_id, MIN(priority) AS priority FROM matches GROUP BY hpo_id) m
+          ON m.hpo_id=h.hpo_id
+        ORDER BY h.is_obsolete,m.priority,h.name COLLATE NOCASE,h.hpo_id
+        LIMIT ?"""
+    rows = conn.execute(sql, (
+        query, query, query, query, prefix, prefix, prefix, prefix,
+        contains, contains, limit,
+    )).fetchall()
+    return [dict(row) for row in rows]
 
 
 def search_diseases(conn: sqlite3.Connection, query: str, limit: int = 20) -> list[dict]:
     limit = _limit(limit)
+    if not isinstance(query, str):
+        raise ValueError("query must be text")
     query = query.strip()
     if not query:
         return []
@@ -94,8 +107,12 @@ def search_diseases(conn: sqlite3.Connection, query: str, limit: int = 20) -> li
     rows = conn.execute(
         """SELECT disease_id,name FROM diseases
            WHERE disease_id LIKE ? ESCAPE '!' OR name LIKE ? ESCAPE '!' COLLATE NOCASE
-           ORDER BY CASE WHEN disease_id=? THEN 0 ELSE 1 END,name COLLATE NOCASE,disease_id
-           LIMIT ?""", (f"{q}%", f"%{q}%", query, limit),
+           ORDER BY CASE WHEN disease_id=? THEN 0
+                         WHEN name=? COLLATE NOCASE THEN 1
+                         WHEN disease_id LIKE ? ESCAPE '!' THEN 2
+                         WHEN name LIKE ? ESCAPE '!' COLLATE NOCASE THEN 3
+                         ELSE 4 END, name COLLATE NOCASE,disease_id
+           LIMIT ?""", (f"{q}%", f"%{q}%", query, query, f"{q}%", f"{q}%", limit),
     ).fetchall()
     return [dict(row) for row in rows]
 
@@ -108,7 +125,7 @@ def disease_detail(conn: sqlite3.Connection, disease_id: str) -> dict | None:
         return None
     annotations = conn.execute(
         """SELECT p.hpo_id,t.name AS hpo_name,p.is_negated,p.frequency,p.evidence_code,
-                  p.reference_id,p.onset,p.sex,p.aspect
+                  p.reference_id,p.onset,p.sex,p.modifier,p.aspect,p.biocuration
            FROM disease_phenotypes p JOIN hpo_terms t ON p.hpo_id=t.hpo_id
            WHERE p.disease_id=? ORDER BY p.is_negated,p.hpo_id,p.annotation_id""",
         (disease_id,),
@@ -116,11 +133,14 @@ def disease_detail(conn: sqlite3.Connection, disease_id: str) -> dict | None:
     return {**dict(disease), "phenotypes": [dict(row) for row in annotations]}
 
 
-def load_ranking_inputs(conn: sqlite3.Connection) -> tuple[dict, dict, dict, dict]:
+def load_ranking_inputs(conn: sqlite3.Connection, *, phenotypic_only: bool = True) -> tuple[dict, dict, dict, dict]:
     """Return profiles, explicitly negated profiles, labels and parent IDs.
 
     These shapes are compatible with the existing phenotype ranking code.
     Multiple evidence records for the same disease/phenotype collapse to a set.
+    By default, only aspect P (phenotypic abnormalities) enters the clinical
+    phenotype ranking; inheritance/course/history remain available in the DB.
+    Pass phenotypic_only=False to reproduce earlier all-aspect behavior.
     """
     profiles: dict[str, set[str]] = {}
     negatives: dict[str, set[str]] = {}
@@ -128,7 +148,10 @@ def load_ranking_inputs(conn: sqlite3.Connection) -> tuple[dict, dict, dict, dic
     parents: dict[str, set[str]] = {}
     for r in conn.execute("SELECT disease_id,name FROM diseases"):
         labels[r["disease_id"]] = r["name"]
-    for r in conn.execute("SELECT disease_id,hpo_id,is_negated FROM disease_phenotypes"):
+    annotation_query = "SELECT disease_id,hpo_id,is_negated FROM disease_phenotypes"
+    if phenotypic_only:
+        annotation_query += " WHERE aspect='P'"
+    for r in conn.execute(annotation_query):
         target = negatives if r["is_negated"] else profiles
         target.setdefault(r["disease_id"], set()).add(r["hpo_id"])
     for r in conn.execute("SELECT child_id,parent_id FROM hpo_parents"):
@@ -138,7 +161,7 @@ def load_ranking_inputs(conn: sqlite3.Connection) -> tuple[dict, dict, dict, dic
 
 def stats(conn: sqlite3.Connection) -> dict:
     tables = ("hpo_terms", "hpo_aliases", "hpo_synonyms", "hpo_parents",
-              "diseases", "disease_phenotypes")
+              "diseases", "disease_phenotypes", "hpoa_source_rows")
     counts = {name: conn.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
               for name in tables}
     counts["negative_annotations"] = conn.execute(

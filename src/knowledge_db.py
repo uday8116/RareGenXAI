@@ -11,17 +11,19 @@ Reads official HPO files prepared by python -m src.data. Never stores patient da
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
 import re
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.data import load_annotations, load_ontology
-from src.db_access import DEFAULT_DB, connect_readonly, disease_detail, phenotype
+from src.data import load_ontology
+from src.db_access import DEFAULT_DB, connect_readonly, disease_detail
 from src.db_access import search_diseases, search_phenotypes, stats
 from src.db_schema import SCHEMA_VERSION, apply_migrations
 
@@ -60,21 +62,75 @@ def verify_sources(raw_dir: Path) -> dict:
     return manifest
 
 
-def validate_connection(conn: sqlite3.Connection) -> dict:
+def validate_connection(conn: sqlite3.Connection, raw_dir: Path | None = None) -> dict:
+    """Check SQLite integrity, full annotation accounting, and source provenance."""
+    conn.row_factory = sqlite3.Row
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version != SCHEMA_VERSION:
-        raise ValueError(f"Unexpected DB schema version: {version} (expected {SCHEMA_VERSION})")
-    if conn.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-        raise ValueError("SQLite quick_check failed")
+        raise ValueError(
+            f"Unexpected DB schema version: {version} (expected {SCHEMA_VERSION}). "
+            "Rebuild with: python -m src.knowledge_db build --replace"
+        )
+    if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+        raise ValueError("SQLite integrity_check failed")
     if conn.execute("PRAGMA foreign_key_check").fetchall():
         raise ValueError("SQLite foreign key checks failed")
     result = stats(conn)
     counts = result["counts"]
     if not counts["hpo_terms"] or not counts["diseases"] or not counts["disease_phenotypes"]:
         raise ValueError("Knowledge database has no terms, diseases, or annotations")
-    if len(result["sources"]) != 2:
-        raise ValueError("Knowledge database must record both official HPO sources")
+    sources = {row["filename"]: row for row in result["sources"]}
+    if set(sources) != {"hp.obo", "phenotype.hpoa"}:
+        raise ValueError("Missing or unexpected source provenance entries")
+    for name, data in sources.items():
+        if not SHA_RE.fullmatch(data["sha256"]) or data["byte_count"] <= 0:
+            raise ValueError(f"Invalid recorded provenance for {name}")
+    metadata = result["metadata"]
+    try:
+        read = int(metadata["annotation_rows_read"])
+        duplicates = int(metadata["duplicate_annotations"])
+        unmapped = int(metadata["unmapped_annotations"])
+    except (KeyError, ValueError, TypeError) as exc:
+        raise ValueError(f"Missing/invalid annotation accounting: {exc}") from exc
+    if (read != counts["hpoa_source_rows"] or
+            duplicates != read - counts["disease_phenotypes"] or
+            unmapped != 0 or read < 1):
+        raise ValueError(
+            "Annotation accounting mismatch: source rows, compact associations "
+            "and duplicate counts must agree"
+        )
+    if raw_dir is not None:
+        manifest = verify_sources(Path(raw_dir))
+        for name in ("hp.obo", "phenotype.hpoa"):
+            data = sources[name]
+            if (data["source_url"] != manifest[name]["url"] or
+                    data["sha256"] != manifest[name]["sha256"] or
+                    data["byte_count"] != manifest[name]["bytes"]):
+                raise ValueError(f"Database provenance differs from local {name}")
     return result
+
+
+def _annotations(path: Path):
+    """Strict streaming HPOA parser: never silently drop malformed HPO IDs."""
+    columns = (
+        "database_id", "disease_name", "qualifier", "hpo_id", "reference",
+        "evidence", "onset", "frequency", "sex", "modifier", "aspect",
+        "biocuration",
+    )
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(
+            (line for line in handle if not line.lstrip().startswith("#")),
+            delimiter="\t", restkey="__unexpected_columns__", restval=None,
+        )
+        if not reader.fieldnames or set(reader.fieldnames) != set(columns):
+            raise ValueError(
+                f"HPOA format drift: expected 12 named columns {columns}, "
+                f"got {reader.fieldnames}"
+            )
+        for index, row in enumerate(reader, start=1):
+            if "__unexpected_columns__" in row or any(row.get(name) is None for name in columns):
+                raise ValueError(f"HPOA row {index} has incorrect column count")
+            yield index, {name: str(row[name]).strip() for name in columns}
 
 
 def _populate(conn: sqlite3.Connection, raw_dir: Path, manifest: dict) -> dict:
@@ -111,46 +167,49 @@ def _populate(conn: sqlite3.Connection, raw_dir: Path, manifest: dict) -> dict:
                 )
     conn.executemany("INSERT INTO hpo_aliases(alias_id,hpo_id) VALUES (?,?)",
                      sorted(aliases.items()))
-    df = load_annotations(raw_dir / "phenotype.hpoa")
-    columns = {key: index for index, key in enumerate(df.columns)}
-    def get(row, key):
-        idx = columns.get(key)
-        return str(row[idx]).strip() if idx is not None else ""
-
     seen = 0
-    unresolvable = 0
-    for row in df.itertuples(index=False, name=None):
-        seen += 1
-        disease_id, raw_id = get(row, "database_id"), get(row, "hpo_id")
-        qualifier = get(row, "qualifier").upper()
-        if not disease_id or not HPO_RE.fullmatch(raw_id):
-            raise ValueError(f"Malformed disease/HPO ID in annotation row {seen}")
+    for seen, row in _annotations(raw_dir / "phenotype.hpoa"):
+        disease_id, raw_id = row["database_id"], row["hpo_id"]
+        qualifier = row["qualifier"].upper()
+        aspect = row["aspect"].upper()
+        if not disease_id or ":" not in disease_id or not row["disease_name"]:
+            raise ValueError(f"Malformed disease ID/name in HPOA row {seen}")
+        if not HPO_RE.fullmatch(raw_id):
+            raise ValueError(f"Invalid HPO ID {raw_id!r} in HPOA row {seen}")
         if qualifier not in ("", "NOT"):
-            raise ValueError(f"Unknown HPOA qualifier '{qualifier}' in row {seen}")
+            raise ValueError(f"Unknown HPOA qualifier {qualifier!r} in row {seen}")
+        if aspect not in {"P", "C", "I", "M", "H"}:
+            raise ValueError(f"Unexpected HPOA aspect {aspect!r} in row {seen}")
+        if not row["reference"] or not row["evidence"] or not row["biocuration"]:
+            raise ValueError(f"Missing mandatory HPOA evidence/reference/biocuration in row {seen}")
         hp = raw_id if raw_id in ids else aliases.get(raw_id)
         if hp is None:
-            unresolvable += 1
-            continue
-        name = get(row, "disease_name") or disease_id
+            raise ValueError(f"Unknown HPO term {raw_id!r} in HPOA row {seen}")
+        name = row["disease_name"]
         conn.execute("INSERT OR IGNORE INTO diseases(disease_id,name) VALUES (?,?)",
                      (disease_id, name))
-        if name != disease_id:
-            conn.execute(
-                "UPDATE diseases SET name=? WHERE disease_id=? AND name=disease_id",
-                (name, disease_id),
-            )
+        conn.execute(
+            """INSERT INTO hpoa_source_rows(
+                   row_number,disease_id,disease_name,raw_hpo_id,hpo_id,
+                   qualifier,reference_id,evidence_code,onset,frequency,sex,
+                   modifier,aspect,biocuration)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (seen, disease_id, name, raw_id, hp, qualifier, row["reference"],
+             row["evidence"], row["onset"], row["frequency"], row["sex"],
+             row["modifier"], aspect, row["biocuration"]),
+        )
         conn.execute(
             """INSERT OR IGNORE INTO disease_phenotypes(
                  disease_id,hpo_id,is_negated,evidence_code,reference_id,
-                 frequency,onset,sex,aspect) VALUES (?,?,?,?,?,?,?,?,?)""",
-            (disease_id, hp, int(qualifier == "NOT"), get(row, "evidence"),
-             get(row, "reference"), get(row, "frequency"),
-             get(row, "onset"), get(row, "sex"), get(row, "aspect")),
+                 frequency,onset,sex,modifier,aspect,biocuration)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+            (disease_id, hp, int(qualifier == "NOT"), row["evidence"],
+             row["reference"], row["frequency"], row["onset"], row["sex"],
+             row["modifier"], aspect, row["biocuration"]),
         )
-    if seen == 0 or unresolvable == seen:
-        raise ValueError("No usable disease–phenotype annotations")
-    if unresolvable / seen > 0.05:
-        raise ValueError(f"More than 5% of annotations have no matching ontology term: {unresolvable}/{seen}")
+    if seen == 0:
+        raise ValueError("No HPOA annotation rows found")
+    compact_count = conn.execute("SELECT COUNT(*) FROM disease_phenotypes").fetchone()[0]
 
     for filename in ("hp.obo", "phenotype.hpoa"):
         data = manifest[filename]
@@ -162,7 +221,8 @@ def _populate(conn: sqlite3.Connection, raw_dir: Path, manifest: dict) -> dict:
         "schema_version": str(SCHEMA_VERSION),
         "imported_at_utc": datetime.now(timezone.utc).isoformat(),
         "annotation_rows_read": str(seen),
-        "unmapped_annotations": str(unresolvable),
+        "unmapped_annotations": "0",
+        "duplicate_annotations": str(seen - compact_count),
         "annotation_source_type": "public_HPO_disease_knowledge_not_patient_records",
     }
     conn.executemany("INSERT INTO db_metadata(key,value) VALUES (?,?)", metadata.items())
@@ -186,7 +246,9 @@ def build_database(raw_dir: str | Path = DEFAULT_RAW, db_path: str | Path = DEFA
         apply_migrations(conn)
         with conn:
             _populate(conn, raw_dir, manifest)
-        result = validate_connection(conn)
+        if verify_sources(raw_dir) != manifest:
+            raise ValueError("HPO files or manifest changed during database import")
+        result = validate_connection(conn, raw_dir=raw_dir)
         conn.close()
         conn = None
         if destination.exists() and not replace:
@@ -210,6 +272,9 @@ def main(argv: list[str] | None = None) -> int:
     for command in ("verify", "stats", "search-hpo", "search-disease", "disease"):
         p = sub.add_parser(command)
         p.add_argument("--db", type=Path, default=DEFAULT_DB)
+        if command == "verify":
+            p.add_argument("--raw-dir", type=Path, default=None,
+                           help="Compare DB source hashes with local HPO files")
         if command.startswith("search"):
             p.add_argument("query")
             p.add_argument("--limit", type=int, default=20)
@@ -219,9 +284,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "build":
         output = build_database(args.raw_dir, args.db, replace=args.replace)
     else:
-        with connect_readonly(args.db) as conn:
+        with closing(connect_readonly(args.db)) as conn:
             if args.command == "verify":
-                output = validate_connection(conn)
+                output = validate_connection(conn, raw_dir=args.raw_dir)
             elif args.command == "stats":
                 output = stats(conn)
             elif args.command == "search-hpo":

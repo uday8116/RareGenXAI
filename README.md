@@ -102,9 +102,9 @@ Phase 2 provides a versioned, reproducible SQLite knowledge base using official 
 ```bash
 .venv/bin/python -m src.data
 .venv/bin/python -m src.knowledge_db build
-.venv/bin/python -m src.knowledge_db verify
+.venv/bin/python -m src.knowledge_db verify --raw-dir data/raw
 .venv/bin/python -m src.knowledge_db search-hpo "seizure"
 .venv/bin/python -m src.knowledge_db search-disease "Marfan"
 ```
 
-Run `.venv/bin/python -m src.knowledge_db build --replace` to deliberately replace an existing local database after validation. The default database is `data/local/raregen.sqlite3` (ignored by Git). See [Phase 2 database and search documentation](docs/PHASE_02_DATA_DATABASE.md).
+Run `.venv/bin/python -m src.knowledge_db build --replace` to deliberately replace an existing local database after validation, especially when upgrading from schema v1 to schema v2. Back up the old local file first. The default database is `data/local/raregen.sqlite3` (ignored by Git). See [Phase 2 database and search documentation](docs/PHASE_02_DATA_DATABASE.md).
