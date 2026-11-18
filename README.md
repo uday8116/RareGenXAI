@@ -15,7 +15,26 @@ A reproducible **research prototype** that prioritizes candidate rare diseases u
 - Controlled synthetic benchmark with Top-1, Top-5, and mean reciprocal rank (MRR)
 - Unit tests
 
-## Installation (macOS Apple Silicon M1)
+## Phase 1: local Apple Silicon setup (M5, 16 GB)
+
+The first phase provides a repeatable local setup and diagnostic toolchain. It **does not** yet install the planned React/FastAPI application or provide newly trained models.
+
+On macOS, install Python 3.11 (recommended), Git, and optionally Node.js (needed for the later React phase). With Homebrew: `brew install python@3.11 git node`. Then:
+
+```bash
+git clone https://github.com/uday8116/RareGenXAI.git
+cd RareGenXAI
+bash scripts/bootstrap_macos.sh
+bash scripts/verify_local.sh
+```
+
+To also prepare official HPO data, run `bash scripts/bootstrap_macos.sh --data`, then `bash scripts/verify_local.sh --full`. This downloads public research data and requires internet access. Start the **existing** Streamlit prototype with `.venv/bin/python -m streamlit run app.py`.
+
+- [Detailed macOS guide](docs/LOCAL_DEVELOPMENT_MACOS.md)
+- [Phase 1 audit and acceptance criteria](docs/PHASE_01_FOUNDATION.md)
+- [Seven-day phased implementation plan](docs/PROJECT_IMPLEMENTATION_ROADMAP.md)
+
+## Manual installation (macOS Apple Silicon)
 Install Python 3.11 or 3.12, then in Terminal:
 
 ```bash
