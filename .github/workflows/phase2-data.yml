@@ -54,7 +54,7 @@ jobs:
       - name: Build actual local SQLite database
         run: python -m src.knowledge_db build --db data/local/raregen.sqlite3
       - name: Verify integrity, relationships and provenance
-        run: python -m src.knowledge_db verify --db data/local/raregen.sqlite3
+        run: python -m src.knowledge_db verify --db data/local/raregen.sqlite3 --raw-dir data/raw
       - name: Validate real official-data import
         run: python -m pytest -q tests/test_db_integration.py
       - name: Store import statistics
