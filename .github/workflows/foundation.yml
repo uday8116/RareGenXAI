@@ -1,0 +1,44 @@
+name: Phase 1 Foundation Checks
+
+on:
+  push:
+    paths:
+      - 'scripts/**'
+      - 'tests/test_foundation.py'
+      - '.github/workflows/foundation.yml'
+      - '.python-version'
+      - 'docs/PHASE_01_FOUNDATION.md'
+      - 'docs/LOCAL_DEVELOPMENT_MACOS.md'
+      - 'docs/PROJECT_IMPLEMENTATION_ROADMAP.md'
+      - 'README.md'
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/test_foundation.py'
+      - '.github/workflows/foundation.yml'
+      - '.python-version'
+      - 'docs/PHASE_01_FOUNDATION.md'
+      - 'docs/LOCAL_DEVELOPMENT_MACOS.md'
+      - 'docs/PROJECT_IMPLEMENTATION_ROADMAP.md'
+      - 'README.md'
+  workflow_dispatch:
+
+jobs:
+  foundation:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check script syntax
+        run: bash -n scripts/bootstrap_macos.sh scripts/verify_local.sh
+      - name: Run isolated foundation tests
+        run: python -m unittest discover -s tests -p 'test_foundation.py' -v
+      - name: Run pre-install diagnostic (does not need datasets)
+        run: python scripts/doctor.py --minimal --json
