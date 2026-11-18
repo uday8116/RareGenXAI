@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import importlib.util
 import json
 import platform
@@ -149,11 +150,18 @@ def inspect_project(
     if minimal:
         add("dependencies", "skipped", "Skipped by --minimal for foundation CI")
     else:
-        missing = [module for module in REQUIRED_MODULES
-                   if importlib.util.find_spec(module) is None]
-        add("dependencies", "error" if missing else "ok",
-            "Missing Python modules: " + ", ".join(missing) if missing
-            else "All project Python modules can be found")
+        failures = []
+        for module in REQUIRED_MODULES:
+            if importlib.util.find_spec(module) is None:
+                failures.append(f"{module}: not installed")
+                continue
+            try:
+                importlib.import_module(module)
+            except Exception as exc:
+                failures.append(f"{module}: {type(exc).__name__}: {exc}")
+        add("dependencies", "error" if failures else "ok",
+            "Python imports failed: " + "; ".join(failures) if failures
+            else "All core project Python modules imported successfully")
 
     issues = _hpo_issues(root)
     add("hpo_data", ("error" if require_data else "warning") if issues else "ok",

@@ -42,10 +42,10 @@ These numbers have **not** been reproduced locally by this Phase 1 change. Model
 
 - `.python-version` recommends Python 3.11.
 - `scripts/bootstrap_macos.sh` creates `.venv`, installs dependencies and optionally prepares HPO.
-- `scripts/doctor.py` checks environment health, datasets and saved model presence.
+- `scripts/doctor.py` checks native architecture, importable dependencies (not just presence), raw HPO checksums/schema, parsed profiles and saved model-file presence.
 - `scripts/verify_local.sh` provides reproducible quick/full tests.
 - `tests/test_foundation.py` exercises the environment checker without external datasets.
-- `.github/workflows/foundation.yml` checks Python and shell syntax on Linux and macOS runners.
+- `.github/workflows/foundation.yml` checks Python/shell syntax on Linux and Apple Silicon runners **and actually installs dependencies and runs quick checks on macOS arm64**.
 - `docs/LOCAL_DEVELOPMENT_MACOS.md` has user instructions.
 - `docs/PROJECT_IMPLEMENTATION_ROADMAP.md` defines future phase gates.
 
@@ -57,9 +57,9 @@ Phase 1 intentionally does **not** claim a finished new UI, new database, new tr
 | --- | --- | --- |
 | P1-A | Source audit and unresolved risks written down | This document |
 | P1-B | macOS bootstrap operates without sudo and only uses `.venv` | Run on target Mac |
-| P1-C | CLI reports actionable errors for unsupported Python or missing required artifacts | `tests/test_foundation.py` |
+| P1-C | CLI reports actionable errors for unsupported Python, Rosetta and invalid/missing HPO inputs | `tests/test_foundation.py` |
 | P1-D | Quick tests succeed without HPO downloads | `bash scripts/verify_local.sh` on target Mac |
-| P1-E | CI validates scripts on Linux and macOS | New foundation workflow run |
+| P1-E | CI validates scripts and actually bootstraps a macOS arm64 runner | New foundation workflow run |
 | P1-F | Full existing prototype can load from real HPO data | `--data`, `--full`, manual local Streamlit test |
 | P1-G | New files reviewed and merged without disrupting `main` | Phase 1 pull request |
 
@@ -68,3 +68,9 @@ Phase 1 intentionally does **not** claim a finished new UI, new database, new tr
 ## 6. Phase 2 handoff
 
 Design a local SQLite schema with stable IDs, foreign keys and migrations; ingest versioned official HPO and HPOA, verify provenance/checksums, validate referential integrity and expose a read-only data-access layer. Do not yet add patient-identifiable storage or run unapproved clinical datasets.
+
+## 7. Phase 1 follow-up audit and changes
+
+The first CI run was green, but the audit found that the doctor only verified data file presence and the workflow checked macOS shell syntax without executing a native install. This branch now adds streaming SHA-256 checks against the downloaded manifest, HPOA/JSON structure checks, native arm64 and virtualenv preflight, actual Python module imports, version snapshot ignored by Git, deterministic tests for corrupted data, and a macOS arm64 bootstrap CI job. Local data, generated SQLite files and the machine-specific dependency snapshot are excluded from Git.
+
+These checks verify an environment and **data packaging integrity**, not medical annotation correctness, calibrated model scores, or independent clinical validation. The final user-machine verification gates remain the owner's responsibility, because GitHub cannot inspect or operate their physical Mac.
