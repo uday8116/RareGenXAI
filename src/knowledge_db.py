@@ -11,17 +11,19 @@ Reads official HPO files prepared by python -m src.data. Never stores patient da
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
 import re
 import sqlite3
 import uuid
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
-from src.data import load_annotations, load_ontology
-from src.db_access import DEFAULT_DB, connect_readonly, disease_detail, phenotype
+from src.data import load_ontology
+from src.db_access import DEFAULT_DB, connect_readonly, disease_detail
 from src.db_access import search_diseases, search_phenotypes, stats
 from src.db_schema import SCHEMA_VERSION, apply_migrations
 
@@ -60,21 +62,75 @@ def verify_sources(raw_dir: Path) -> dict:
     return manifest
 
 
-def validate_connection(conn: sqlite3.Connection) -> dict:
+def validate_connection(conn: sqlite3.Connection, raw_dir: Path | None = None) -> dict:
+    """Check SQLite integrity, full annotation accounting, and source provenance."""
+    conn.row_factory = sqlite3.Row
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version != SCHEMA_VERSION:
-        raise ValueError(f"Unexpected DB schema version: {version} (expected {SCHEMA_VERSION})")
-    if conn.execute("PRAGMA quick_check").fetchone()[0] != "ok":
-        raise ValueError("SQLite quick_check failed")
+        raise ValueError(
+            f"Unexpected DB schema version: {version} (expected {SCHEMA_VERSION}). "
+            "Rebuild with: python -m src.knowledge_db build --replace"
+        )
+    if conn.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
+        raise ValueError("SQLite integrity_check failed")
     if conn.execute("PRAGMA foreign_key_check").fetchall():
         raise ValueError("SQLite foreign key checks failed")
     result = stats(conn)
     counts = result["counts"]
     if not counts["hpo_terms"] or not counts["diseases"] or not counts["disease_phenotypes"]:
         raise ValueError("Knowledge database has no terms, diseases, or annotations")
-    if len(result["sources"]) != 2:
-        raise ValueError("Knowledge database must record both official HPO sources")
+    sources = {row["filename"]: row for row in result["sources"]}
+    if set(sources) != {"hp.obo", "phenotype.hpoa"}:
+        raise ValueError("Missing or unexpected source provenance entries")
+    for name, data in sources.items():
+        if not SHA_RE.fullmatch(data["sha256"]) or data["byte_count"] <= 0:
+            raise ValueError(f"Invalid recorded provenance for {name}")
+    metadata = result["metadata"]
+    try:
+        read = int(metadata["annotation_rows_read"])
+        duplicates = int(metadata["duplicate_annotations"])
+        unmapped = int(metadata["unmapped_annotations"])
+    except (KeyError, ValueError, TypeError) as exc:
+        raise ValueError(f"Missing/invalid annotation accounting: {exc}") from exc
+    if (read != counts["hpoa_source_rows"] or
+            duplicates != read - counts["disease_phenotypes"] or
+            unmapped != 0 or read < 1):
+        raise ValueError(
+            "Annotation accounting mismatch: source rows, compact associations "
+            "and duplicate counts must agree"
+        )
+    if raw_dir is not None:
+        manifest = verify_sources(Path(raw_dir))
+        for name in ("hp.obo", "phenotype.hpoa"):
+            data = sources[name]
+            if (data["source_url"] != manifest[name]["url"] or
+                    data["sha256"] != manifest[name]["sha256"] or
+                    data["byte_count"] != manifest[name]["bytes"]):
+                raise ValueError(f"Database provenance differs from local {name}")
     return result
+
+
+def _annotations(path: Path):
+    """Strict streaming HPOA parser: never silently drop malformed HPO IDs."""
+    columns = (
+        "database_id", "disease_name", "qualifier", "hpo_id", "reference",
+        "evidence", "onset", "frequency", "sex", "modifier", "aspect",
+        "biocuration",
+    )
+    with path.open("r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(
+            (line for line in handle if not line.lstrip().startswith("#")),
+            delimiter="\t", restkey="__unexpected_columns__", restval=None,
+        )
+        if not reader.fieldnames or set(reader.fieldnames) != set(columns):
+            raise ValueError(
+                f"HPOA format drift: expected 12 named columns {columns}, "
+                f"got {reader.fieldnames}"
+            )
+        for index, row in enumerate(reader, start=1):
+            if "__unexpected_columns__" in row or any(row.get(name) is None for name in columns):
+                raise ValueError(f"HPOA row {index} has incorrect column count")
+            yield index, {name: str(row[name]).strip() for name in columns}
 
 
 def _populate(conn: sqlite3.Connection, raw_dir: Path, manifest: dict) -> dict:
