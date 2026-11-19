@@ -79,7 +79,12 @@ def create_app(
                     status_code=403,
                     content={"detail": "Local-only research API: remote clients are not allowed"},
                 )
-        return await call_next(request)
+        response = await call_next(request)
+        # Avoid retaining phenotype-ranking responses in browser/proxy caches.
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
 
     service = ResearchService(db_path, model_path)
     app.state.research_service = service
