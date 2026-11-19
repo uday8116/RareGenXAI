@@ -27,9 +27,11 @@ class ResearchService:
         self._model = None
         self._manifest = None
 
-    def _file_key(self, path: Path) -> tuple[int, int]:
+    def _file_key(self, path: Path) -> tuple[int, int, int, int, int]:
+        """Detect atomic file replacement even with equal size/mtime values."""
         state = path.stat()
-        return (state.st_mtime_ns, state.st_size)
+        return (state.st_dev, state.st_ino, state.st_ctime_ns,
+                state.st_mtime_ns, state.st_size)
 
     def context(self) -> dict:
         """Load validated schema-v2 clinical phenotype data only once per snapshot."""
