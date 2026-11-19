@@ -70,6 +70,8 @@ jobs:
           python -m src.train_ml --seed 42 --train-diseases 120 --test-diseases 30 --queries-per-disease 1 --candidates 25
           python -m src.verify_models --raw-dir data/raw
       - name: Exercise official HPO search and model ranking through FastAPI
+        env:
+          RAREGEN_REQUIRE_PHASE4_INTEGRATION: '1'
         run: python -m pytest -q tests/test_api.py tests/test_api_integration.py
       - name: Export API OpenAPI document
         run: |
