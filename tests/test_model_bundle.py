@@ -113,3 +113,17 @@ def test_bad_training_sizes_rejected():
     model = RareGenML(PROFILES)
     with pytest.raises(ValueError, match="positive integers"):
         model.train(train_diseases=0)
+
+
+def test_repeated_training_uses_identical_example_matrix():
+    left, right = RareGenML(PROFILES), RareGenML(PROFILES)
+    a_rows, a_summary, a_meta = left.train(
+        seed=99, train_diseases=10, test_diseases=4,
+        queries_per_disease=1, candidates=10)
+    b_rows, b_summary, b_meta = right.train(
+        seed=99, train_diseases=10, test_diseases=4,
+        queries_per_disease=1, candidates=10)
+    assert a_meta["training_feature_matrix_sha256"] == b_meta["training_feature_matrix_sha256"]
+    assert a_meta["train_disease_ids"] == b_meta["train_disease_ids"]
+    assert a_rows == b_rows
+    assert a_summary == b_summary

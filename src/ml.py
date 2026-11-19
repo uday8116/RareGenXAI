@@ -4,6 +4,7 @@ Training examples come from HPO disease annotations, NOT clinical patients.
 Classifier output is an uncalibrated ranking signal, NOT a diagnostic probability.
 """
 import csv
+import hashlib
 import random
 from pathlib import Path
 
@@ -127,7 +128,12 @@ class RareGenML:
                 for candidate_id, score in candidates_by_id.items():
                     x.append(self.features(observations, candidate_id, score))
                     y.append(int(candidate_id == disease))
-        self._fit(np.stack(x), np.array(y), seed)
+        features_matrix = np.stack(x).astype(np.float64, copy=False)
+        target_labels = np.array(y, dtype=np.int8)
+        training_input_sha256 = hashlib.sha256(
+            features_matrix.tobytes(order="C") + target_labels.tobytes(order="C")
+        ).hexdigest()
+        self._fit(features_matrix, target_labels.astype(np.int64), seed)
         details = []
         for disease in heldout:
             for missing in (0.0, 0.2, 0.4, 0.6):
@@ -152,6 +158,7 @@ class RareGenML:
         metadata = {"seed": seed, "train_diseases": len(training), "heldout_diseases": len(heldout),
                     "queries_per_disease": queries_per_disease, "candidates": candidates,
                     "features": FEATURES, "training_pairs": len(y),
+                    "training_feature_matrix_sha256": training_input_sha256,
                     "train_disease_ids": sorted(training),
                     "heldout_disease_ids": sorted(heldout),
                     "validation_kind": "synthetic_disease_disjoint_not_patient_level",

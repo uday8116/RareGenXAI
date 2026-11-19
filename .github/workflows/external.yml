@@ -11,6 +11,12 @@ on:
       - 'src/model_bundle.py'
       - 'src/verify_models.py'
       - '.github/workflows/external.yml'
+env:
+  PYTHONHASHSEED: '42'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+
 jobs:
   patient_benchmark:
     runs-on: ubuntu-latest

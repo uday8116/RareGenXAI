@@ -28,6 +28,12 @@ on:
       - 'docs/PHASE_03_MODELS.md'
   workflow_dispatch:
 
+env:
+  PYTHONHASHSEED: '42'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+
 jobs:
   model-unit-tests:
     strategy:
