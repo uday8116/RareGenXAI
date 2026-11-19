@@ -30,8 +30,8 @@ jobs:
           python -m src.knowledge_db verify --raw-dir data/raw
       - name: Train and verify synthetic HPO model bundle
         run: |
-          python -m src.train_ml --train-diseases 200 --test-diseases 60 --queries-per-disease 2
-          python -m src.verify_models --db data/local/raregen.sqlite3
+          python -m src.train_ml --seed 42 --train-diseases 600 --test-diseases 120 --queries-per-disease 2 --candidates 40
+          python -m src.verify_models --db data/local/raregen.sqlite3 --raw-dir data/raw
       - name: Fetch published patient test cases
         run: python -m src.rarebench --limit-per-subset 100000
       - name: Evaluate independent published cases
@@ -50,4 +50,6 @@ jobs:
             results/external_paired_bootstrap.csv
             results/ml_summary.csv
             models/raregen_ml.manifest.json
+            data/raw/manifest.json
+            results/ml_metadata.json
           if-no-files-found: warn
