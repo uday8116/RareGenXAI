@@ -11,6 +11,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,7 +19,7 @@ from pathlib import Path
 import joblib
 from src.ml import FEATURES, RareGenML
 
-SCHEMA = 1
+SCHEMA = 2
 METHODS = ("tfidf", "logistic", "random_forest", "xgboost", "mlp")
 PACKAGES = ("numpy", "scikit-learn", "xgboost", "joblib", "pandas")
 
@@ -61,6 +62,12 @@ def _witness(model: RareGenML) -> dict:
 def _verify_model(model: RareGenML, manifest: dict) -> None:
     if not isinstance(model, RareGenML):
         raise ValueError("Artifact is not a RareGenML bundle")
+    if manifest.get("methods") != list(METHODS):
+        raise ValueError("Model bundle method list mismatch")
+    if manifest.get("training", {}).get("retrieval_policy") != "positive_tfidf_only_ties_by_disease_id":
+        raise ValueError("Outdated retrieval policy in model bundle; retrain with Phase 3 review code")
+    if manifest.get("training", {}).get("training_negative_policy") != "seeded_uniform_padding_training_only":
+        raise ValueError("Outdated negative sampling policy in model bundle; retrain")
     if sorted(model.models) != sorted(METHODS[1:]):
         raise ValueError("Missing or unexpected trained estimators")
     if list(manifest.get("features", [])) != FEATURES:
@@ -93,7 +100,7 @@ def load_verified_bundle(
         )
     manifest = json.loads(meta_path.read_text(encoding="utf-8"))
     if manifest.get("manifest_schema") != SCHEMA:
-        raise ValueError("Unsupported model manifest schema")
+        raise ValueError("Unsupported model manifest schema; retrain using the current Phase 3 code")
     if manifest.get("artifact_sha256") != _digest(path):
         raise ValueError("Model SHA-256 mismatch: file is stale or corrupted")
     if expected_profiles is not None and profile_digest(expected_profiles) != manifest.get("profile_sha256"):
@@ -138,21 +145,44 @@ def save_verified_bundle(
     fd, tmp_name = tempfile.mkstemp(prefix=".model-", suffix=".joblib", dir=path.parent)
     os.close(fd)
     tmp_path = Path(tmp_name)
-    json_tmp = None
+    # The staging manifest must be adjacent to its joblib file, so the usual
+    # model loader can validate both *before* they are published.
+    staged_manifest = tmp_path.with_suffix(".manifest.json")
     try:
         joblib.dump(model, tmp_path, compress=3)
         manifest["artifact_sha256"] = _digest(tmp_path)
-        fd, json_name = tempfile.mkstemp(prefix=".model-", suffix=".json", dir=path.parent)
-        json_tmp = Path(json_name)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            json.dump(manifest, handle, indent=2, sort_keys=True)
-            handle.write("\n")
-        # Validate files before publishing. A partially written pair fails closed.
-        os.replace(tmp_path, path)
-        os.replace(json_tmp, meta_path)
-        load_verified_bundle(path, expected_profiles=model.profiles)
+        staged_manifest.write_text(
+            json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        load_verified_bundle(tmp_path, expected_profiles=model.profiles)
+        # Publication of two paths is not truly atomic. Back up the last known
+        # pair and restore both if either replacement or post-publish
+        # verification fails. A concurrent reader must still fail closed if it
+        # sees a mismatched pair during this short window.
+        with tempfile.TemporaryDirectory(prefix=".model-backup-", dir=path.parent) as directory:
+            backup = Path(directory)
+            old_model = backup / "previous.joblib"
+            old_manifest = backup / "previous.manifest.json"
+            if path.exists():
+                shutil.copy2(path, old_model)
+            if meta_path.exists():
+                shutil.copy2(meta_path, old_manifest)
+            try:
+                os.replace(tmp_path, path)
+                os.replace(staged_manifest, meta_path)
+                load_verified_bundle(path, expected_profiles=model.profiles)
+            except Exception:
+                if old_model.exists():
+                    os.replace(old_model, path)
+                else:
+                    path.unlink(missing_ok=True)
+                if old_manifest.exists():
+                    os.replace(old_manifest, meta_path)
+                else:
+                    meta_path.unlink(missing_ok=True)
+                raise
         return manifest
     finally:
         tmp_path.unlink(missing_ok=True)
-        if json_tmp is not None:
-            json_tmp.unlink(missing_ok=True)
+        staged_manifest.unlink(missing_ok=True)

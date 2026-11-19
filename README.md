@@ -119,6 +119,6 @@ The Phase 3 workflow fits TF-IDF retrieval and four supervised rerankers (Logist
 .venv/bin/python -m src.verify_models --raw-dir data/raw
 ```
 
-The saved model lives at `models/raregen_ml.joblib` with a matching `models/raregen_ml.manifest.json`. The manifest verifies file integrity and input dataset provenance, and a fresh load must reproduce stored predictions. All binary models stay out of Git and are available in the Phase 3 GitHub workflow as a short-lived artifact. See [Phase 3 model training guide](docs/PHASE_03_MODELS.md) and [Phase 3 verified results and review](docs/PHASE_03_REVIEW.md).
+The saved model lives at `models/raregen_ml.joblib` with a matching `models/raregen_ml.manifest.json`. The manifest verifies file integrity and input dataset provenance, and a fresh load must reproduce stored predictions. All binary models stay out of Git and are available in the Phase 3 GitHub workflow as a short-lived artifact. See [Phase 3 model training guide](docs/PHASE_03_MODELS.md), [historical Phase 3 metrics](docs/PHASE_03_REVIEW.md), and [Phase 3 independent correctness review](docs/PHASE_03_FINAL_AUDIT.md).
 
 **Important:** Only load trusted local or trusted project CI joblib files. ML ranking scores are not calibrated probabilities.

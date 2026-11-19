@@ -127,3 +127,44 @@ def test_repeated_training_uses_identical_example_matrix():
     assert a_meta["train_disease_ids"] == b_meta["train_disease_ids"]
     assert a_rows == b_rows
     assert a_summary == b_summary
+
+
+def test_legacy_bundle_schema_must_be_retrained(fitted, tmp_path):
+    model, meta = fitted
+    path = tmp_path / "model.joblib"
+    save_verified_bundle(model, path, training=meta, source={"kind": "unit_test"})
+    manifest_path = path.with_suffix(".manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["manifest_schema"] = 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported model manifest schema"):
+        load_verified_bundle(path)
+
+
+def test_failed_publication_restores_previous_verified_bundle(fitted, tmp_path, monkeypatch):
+    """An interrupted second file replacement must not destroy a good model."""
+    import os
+    model, meta = fitted
+    path = tmp_path / "model.joblib"
+    metadata_path = path.with_suffix(".manifest.json")
+    save_verified_bundle(model, path, training=meta, source={"kind": "unit_test"})
+    original_model = path.read_bytes()
+    original_manifest = metadata_path.read_bytes()
+    real_replace = os.replace
+    failures = {"count": 0}
+
+    def fail_once(source, destination):
+        if destination == metadata_path and failures["count"] == 0:
+            failures["count"] += 1
+            raise OSError("simulated interrupted manifest publication")
+        return real_replace(source, destination)
+
+    monkeypatch.setattr("src.model_bundle.os.replace", fail_once)
+    with pytest.raises(OSError, match="simulated interrupted"):
+        save_verified_bundle(model, path, training=meta, source={"kind": "unit_test"})
+    assert failures["count"] == 1
+    assert path.read_bytes() == original_model
+    assert metadata_path.read_bytes() == original_manifest
+    restored, _ = load_verified_bundle(path)
+    assert restored.ids == model.ids
+    assert not list(tmp_path.glob(".model-*"))

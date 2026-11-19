@@ -1,5 +1,7 @@
 # Phase 03 — Audit, verified model training and research results
 
+> **Historical implementation report for PR #5.** Its accuracy and candidate-recall figures were measured before the [independent Phase 3 retrieval/evaluation audit](PHASE_03_FINAL_AUDIT.md). Do not use these numbers for the revised model without a new benchmark.
+
 **Review date:** 2026-11-19. **Reference machine:** Apple M5, 16 GB unified memory. **Research status:** runnable training pipeline tested in GitHub CI; physical M5 run not yet confirmed. **Scope:** candidate disease ranking, not clinical diagnosis.
 
 ## 1. Audit of original implementation
