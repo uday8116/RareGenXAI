@@ -45,6 +45,12 @@ def main():
     parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap", "semantic", "quality_semantic"])
     parser.add_argument("--max-cases", type=int, default=0)
     args = parser.parse_args()
+    allowed = {"tfidf", "logistic", "random_forest", "xgboost", "mlp",
+               "overlap", "semantic", "quality_semantic"}
+    if not args.methods or any(m not in allowed for m in args.methods):
+        raise ValueError(f"Invalid model method; choose from {sorted(allowed)}")
+    if len(set(args.methods)) != len(args.methods):
+        raise ValueError("Duplicate model methods are not allowed")
     cases = read_cases(args.cases)
     if args.max_cases > 0:
         cases = cases[:args.max_cases]
@@ -121,7 +127,8 @@ def main():
                             "top1": sum(r["top1"] for r in subset) / n,
                             "top5": sum(r["top5"] for r in subset) / n,
                             "mrr": sum(r["reciprocal_rank"] for r in subset) / n,
-                            "disease_coverage": sum(r["known_disease"] for r in subset) / n})
+                            "disease_coverage": sum(r["known_disease"] for r in subset) / n,
+                            "candidate_recall": sum(bool(r["rank"]) for r in subset) / n})
     summary_path = output.with_name("external_cohort_summary.csv")
     with summary_path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(summary[0]))
@@ -135,7 +142,8 @@ def main():
               "Top1=", round(sum(r["top1"] for r in subset) / len(subset), 4),
               "Top5=", round(sum(r["top5"] for r in subset) / len(subset), 4),
               "MRR=", round(sum(r["reciprocal_rank"] for r in subset) / len(subset), 4),
-              "disease_coverage=", round(sum(r["known_disease"] for r in subset) / len(subset), 4))
+              "disease_coverage=", round(sum(r["known_disease"] for r in subset) / len(subset), 4),
+              "candidate_recall=", round(sum(bool(r["rank"]) for r in subset) / len(subset), 4))
     print("Patient-level external validation only if the supplied cases are independently sourced.")
 
 
