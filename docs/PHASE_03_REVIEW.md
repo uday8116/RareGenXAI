@@ -117,3 +117,7 @@ Back up any existing local DB and model bundle before replacing them. A new HPO 
 ## 8. Phase 4 handoff
 
 Use `src.model_bundle.load_verified_bundle()` for trusted local model inference and `src.db_access.open_readonly()` for HPO search. Expose status and provenance without transmitting or storing identifiable patient information. Keep the research-only warning visible, report model scores as ranking signals rather than calibrated probabilities, and validate all API HPO IDs and observation statuses.
+
+## 9. Reproducibility audit note
+
+During the Phase 3 review, two separate CI jobs (same declared seed, training sizes, source snapshot fingerprint and package versions) produced slightly different Random Forest external results. This is a reproducibility concern worth investigating. The final pipeline therefore records the SHA-256 of the **actual training feature matrix and labels** and applies fixed hash/BLAS/OpenMP thread settings to research CI. Reporting should refer to a specific run and its manifests. Do not treat a cross-run metric as guaranteed invariant until tested repeatedly under a fixed environment.

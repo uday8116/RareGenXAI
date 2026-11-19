@@ -74,6 +74,7 @@ def train_pipeline(args: argparse.Namespace) -> dict:
         "train_diseases": metadata["train_diseases"],
         "heldout_diseases": metadata["heldout_diseases"],
         "training_pairs": metadata["training_pairs"],
+        "training_features_sha256": metadata["training_feature_matrix_sha256"],
         "validation_kind": metadata["validation_kind"],
     }, indent=2))
     return manifest

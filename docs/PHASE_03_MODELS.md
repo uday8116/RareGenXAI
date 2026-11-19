@@ -37,7 +37,7 @@ Use `--train-diseases 120 --test-diseases 30 --queries-per-disease 1 --candidate
 | Path | Contents |
 | --- | --- |
 | `models/raregen_ml.joblib` | Saved TF-IDF index plus fitted LR/RF/XGBoost/MLP; trusted pickle format |
-| `models/raregen_ml.manifest.json` | Artifact SHA-256, HPO profile fingerprint, source hashes, model names, seed, split, package versions, prediction smoke test |
+| `models/raregen_ml.manifest.json` | Artifact SHA-256, HPO profile fingerprint, source hashes, model names, seed, split, **training feature-matrix fingerprint**, package versions, prediction smoke test |
 | `results/ml_trials.csv` | One record per held-out disease, synthetic missingness setting and method |
 | `results/ml_summary.csv` | Synthetic Top-1, Top-5, MRR and candidate recall for each model and missingness |
 | `results/ml_metadata.json` | Source, training configuration, disjoint disease split IDs and evaluation scope |
@@ -84,3 +84,7 @@ print(ranked)
 7. Owner runs installation and trusted bundle verification on actual M5 Mac.
 
 The GitHub CI build is evidence for code correctness on its runner; it does not prove local Mac setup is complete or that medical performance is clinically validated. See [Phase 3 audit and verified synthetic/RareBench results](PHASE_03_REVIEW.md) for actual measured results and unresolved limitations.
+
+### Reproducibility settings
+
+The training and external benchmark workflows set `PYTHONHASHSEED=42` and restrict common OpenMP/BLAS thread pools to one thread. The trainer records the SHA-256 of its exact training feature matrix and binary labels. A matching HPO source checksum alone does **not** guarantee identical fitted weights or metric rows across runs. Compare input-matrix hashes, dependency versions, the seed, the complete results, and the model manifest; investigate any unexplained differences instead of averaging conflicting runs. A local Apple M5 run can differ numerically from Ubuntu, and model results should always be tied to the exact run and source manifest.

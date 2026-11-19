@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import re
 from pathlib import Path
 
 from src.db_access import open_readonly, load_ranking_inputs
@@ -41,6 +42,8 @@ def verify_models(
         raise ValueError("Synthetic training and held-out disease splits are not disjoint")
     if not (training | heldout).issubset(set(model.ids)):
         raise ValueError("Training/evaluation IDs missing from bundled model universe")
+    if not re.fullmatch(r"[a-f0-9]{64}", str(train.get("training_feature_matrix_sha256", ""))):
+        raise ValueError("Missing/invalid training matrix fingerprint")
     if train.get("profile_sha256") != profile_digest(profiles):
         raise ValueError("Recorded HPO profile fingerprint mismatch")
 
@@ -82,6 +85,7 @@ def verify_models(
         "synthetic_trial_rows": len(trials),
         "model_sha256": manifest["artifact_sha256"],
         "profile_sha256": manifest["profile_sha256"],
+        "training_features_sha256": train["training_feature_matrix_sha256"],
         "warning": "Synthetic HPO validation, NOT verified clinical diagnostic accuracy",
     }
 
