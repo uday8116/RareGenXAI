@@ -1,5 +1,7 @@
 # Phase 03 — Local ML Training, Artifacts and Evaluation
 
+**Reviewed model-bundle schema v2:** The [final Phase 3 correctness review](PHASE_03_FINAL_AUDIT.md) removes zero-similarity inference candidates, resolves TF-IDF ties deterministically, audits all synthetic metric rows, and improves save rollback. **Retrain local models after checking out the reviewed code; previous model bundles and the older RareBench figures describe the preceding implementation.**
+
 **Research goal:** repeatable candidate disease ranking using local HPO phenotype knowledge and four supervised candidate rerankers. Phase 3 is a *research prototype*, not a clinically validated classifier or a hospital diagnostic system. Model scores are uncalibrated ranking signals, not diagnosis probabilities.
 
 ## Scope and status
@@ -50,7 +52,7 @@ Use `--train-diseases 120 --test-diseases 30 --queries-per-disease 1 --candidate
 python -m src.verify_models --raw-dir data/raw
 ```
 
-This checks the model SHA-256, verifies the local database has the **same phenotype profile fingerprint and source HPO annotation hashes** as training, reloads all four estimators, compares deterministic rankings, verifies disjoint disease IDs and checks summary/trial table structure.
+This requires the reviewed schema-v2 model bundle, checks the model SHA-256, verifies the local database has the **same phenotype profile fingerprint and source HPO annotation hashes** as training, reloads all four estimators, compares deterministic rankings, verifies disjoint disease IDs and checks summary/trial table structure.
 
 For programmatic use:
 
