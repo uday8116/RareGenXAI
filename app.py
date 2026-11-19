@@ -5,13 +5,15 @@ import streamlit as st
 from src.data import load_ontology
 from src.ranking import ontology_parents, information_content, rank
 from src.ml import RareGenML
+from src.db_access import open_readonly, load_ranking_inputs
 from src.model_bundle import load_verified_bundle
 
 st.set_page_config(page_title="RareGen XAI", page_icon="🧬", layout="wide")
 st.title("🧬 RareGen XAI")
 st.caption("Research demonstration only. Not a diagnostic device; scores are NOT disease probabilities.")
 path = Path("data/processed/profiles.json")
-if not path.exists():
+db_path = Path("data/local/raregen.sqlite3")
+if not path.exists() and not db_path.exists():
     st.info("Preparing official HPO research data for first use. This may take several minutes.")
     try:
         from src.data import prepare as prepare_data
@@ -27,10 +29,17 @@ if not path.exists():
 
 @st.cache_resource
 def resources():
-    data = json.loads(path.read_text())
+    # Phase 3 models and the explainable baselines must use the SAME
+    # phenotype-only candidate universe and source snapshot.
+    if db_path.exists():
+        with open_readonly(db_path) as conn:
+            profiles, negatives, labels, parents = load_ranking_inputs(conn)
+        data = {"labels": labels, "profiles": profiles, "negatives": negatives}
+    else:
+        data = json.loads(path.read_text())
+        profiles = {k: set(v) for k, v in data["profiles"].items()}
+        parents = ontology_parents(load_ontology())
     ontology = load_ontology()
-    parents = ontology_parents(ontology)
-    profiles = {k: set(v) for k, v in data["profiles"].items()}
     ic = information_content(profiles, parents)
     term_names = {t.id: t.name or t.id for t in ontology.terms()}
     return data, parents, profiles, ic, term_names
@@ -73,7 +82,7 @@ def ml_resources():
     model_file = Path("models/raregen_ml.joblib")
     if model_file.exists():
         try:
-            model, _ = load_verified_bundle(model_file)
+            model, _ = load_verified_bundle(model_file, expected_profiles=profiles)
             return model
         except (OSError, ValueError, KeyError, TypeError) as exc:
             st.error("Saved ML artifact failed verification. Retrain with: python -m src.train_ml")
