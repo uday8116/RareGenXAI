@@ -14,6 +14,7 @@ from pathlib import Path
 from src.db_access import open_readonly, load_ranking_inputs
 from src.knowledge_db import validate_connection
 from src.model_bundle import METHODS, load_verified_bundle, profile_digest
+from src.evaluation_integrity import audit_synthetic_results
 
 
 def verify_models(
@@ -58,22 +59,11 @@ def verify_models(
         summary = list(csv.DictReader(f))
     with trial_file.open(newline="", encoding="utf-8") as f:
         trials = list(csv.DictReader(f))
-    if not summary or not trials:
-        raise ValueError("Missing evaluation rows")
-    if set(row["method"] for row in summary) != set(METHODS):
-        raise ValueError("Evaluation summary is missing a model")
-    required_trials = len(heldout) * 4 * len(METHODS)
-    if len(trials) != required_trials:
-        raise ValueError(f"Unexpected trial count {len(trials)} (expected {required_trials})")
-    if any(row["disease"] not in heldout for row in trials):
-        raise ValueError("Held-out trial includes a training or unknown disease")
-    for row in summary:
-        n = int(row["n"])
-        if n != len(heldout):
-            raise ValueError("Unexpected summary cohort size")
-        for key in ("top1", "top5", "mrr", "candidate_recall"):
-            if not 0 <= float(row[key]) <= 1:
-                raise ValueError(f"Invalid metric {key}: {row[key]}")
+    audited = audit_synthetic_results(summary, trials, heldout)
+    if train.get("retrieval_policy") != "positive_tfidf_only_ties_by_disease_id":
+        raise ValueError("Model manifest does not record the reviewed retrieval policy")
+    if train.get("training_negative_policy") != "seeded_uniform_padding_training_only":
+        raise ValueError("Model manifest does not record the reviewed negative-sampling policy")
     return {
         "status": "verified",
         "model_artifact": str(model_path),
@@ -82,7 +72,8 @@ def verify_models(
         "trained_methods": list(model.models),
         "train_diseases": len(training),
         "heldout_diseases": len(heldout),
-        "synthetic_trial_rows": len(trials),
+        "synthetic_trial_rows": audited["trial_rows"],
+        "audited_summary_rows": audited["summary_rows"],
         "model_sha256": manifest["artifact_sha256"],
         "profile_sha256": manifest["profile_sha256"],
         "training_features_sha256": train["training_feature_matrix_sha256"],
