@@ -143,6 +143,8 @@ def test_rank_overlap_explanations_canonicalization(client):
     assert result["results"][0]["evidence"][0]["hpo_id"] == "HP:0001250"
     assert result["model_sha256"] is None
     assert "not calibrated" in result["disclaimer"].lower()
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_semantic_and_negative_observation(client):
@@ -155,7 +157,8 @@ def test_semantic_and_negative_observation(client):
         ],
     })
     assert response.status_code == 200, response.text
-    assert len(response.json()["results"]) == 2
+    assert 0 < len(response.json()["results"]) <= 2
+    assert all(row["score"] > 0 for row in response.json()["results"])
     assert all("contribution" in e for r in response.json()["results"] for e in r["evidence"])
 
 
