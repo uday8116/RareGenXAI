@@ -25,6 +25,7 @@ def client(tmp_path):
             "INSERT INTO hpo_terms(hpo_id,name,definition,is_obsolete) VALUES (?,?,?,?)",
             [
                 ("HP:0000001", "All", "", 0),
+                ("HP:0000006", "Autosomal dominant inheritance", "", 0),
                 ("HP:0000118", "Phenotypic abnormality", "", 0),
                 ("HP:0001250", "Seizure", "A clinical phenotype", 0),
                 ("HP:0001263", "Global developmental delay", "", 0),
@@ -42,6 +43,7 @@ def client(tmp_path):
             ("HP:0001250", "HP:0000118"), ("HP:0001263", "HP:0000118"),
             ("HP:0008000", "HP:0000118"),
             ("HP:0000118", "HP:0000001"),
+            ("HP:0000006", "HP:0000001"),
         ])
         conn.executemany(
             "INSERT INTO diseases(disease_id,name) VALUES (?,?)",
@@ -102,7 +104,7 @@ def test_database_readiness_and_provenance(client):
     assert ready.json()["model_status"] == "missing"
     stats = client.get("/api/v1/knowledge/stats").json()
     assert stats["schema_version"] == "2"
-    assert stats["counts"]["hpo_terms"] == 6
+    assert stats["counts"]["hpo_terms"] == 7
     assert len(stats["sources"]) == 2
 
 
@@ -242,7 +244,7 @@ def test_openapi_and_local_cors(client):
 
 
 def test_reject_nonclinical_hpo_ids_even_when_present_in_ontology(client):
-    for hpo_id in ("HP:0000001", "HP:0000118"):
+    for hpo_id in ("HP:0000001", "HP:0000006", "HP:0000118"):
         response = client.post("/api/v1/rank", json={
             "method": "overlap",
             "observations": [{"hpo_id": hpo_id, "status": "confirmed_present"}],
