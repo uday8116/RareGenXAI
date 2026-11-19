@@ -18,7 +18,7 @@ from pathlib import Path
 import joblib
 from src.ml import FEATURES, RareGenML
 
-SCHEMA = 1
+SCHEMA = 2
 METHODS = ("tfidf", "logistic", "random_forest", "xgboost", "mlp")
 PACKAGES = ("numpy", "scikit-learn", "xgboost", "joblib", "pandas")
 
@@ -61,6 +61,12 @@ def _witness(model: RareGenML) -> dict:
 def _verify_model(model: RareGenML, manifest: dict) -> None:
     if not isinstance(model, RareGenML):
         raise ValueError("Artifact is not a RareGenML bundle")
+    if manifest.get("methods") != list(METHODS):
+        raise ValueError("Model bundle method list mismatch")
+    if manifest.get("training", {}).get("retrieval_policy") != "positive_tfidf_only_ties_by_disease_id":
+        raise ValueError("Outdated retrieval policy in model bundle; retrain with Phase 3 review code")
+    if manifest.get("training", {}).get("training_negative_policy") != "seeded_uniform_padding_training_only":
+        raise ValueError("Outdated negative sampling policy in model bundle; retrain")
     if sorted(model.models) != sorted(METHODS[1:]):
         raise ValueError("Missing or unexpected trained estimators")
     if list(manifest.get("features", [])) != FEATURES:
@@ -93,7 +99,7 @@ def load_verified_bundle(
         )
     manifest = json.loads(meta_path.read_text(encoding="utf-8"))
     if manifest.get("manifest_schema") != SCHEMA:
-        raise ValueError("Unsupported model manifest schema")
+        raise ValueError("Unsupported model manifest schema; retrain using the current Phase 3 code")
     if manifest.get("artifact_sha256") != _digest(path):
         raise ValueError("Model SHA-256 mismatch: file is stale or corrupted")
     if expected_profiles is not None and profile_digest(expected_profiles) != manifest.get("profile_sha256"):
