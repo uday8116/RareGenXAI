@@ -26,13 +26,27 @@ The simulated negative candidates in the training phase are **not patient observ
 
 ### Verification gates
 
-- [x] Source code changes and regression tests implemented in review PR
-- [ ] Latest Ubuntu and Apple Silicon model unit CI green
-- [ ] Latest official HPO training workflow green with saved model v2 and manifest
-- [ ] Latest complete repository integration workflow green
-- [ ] Updated identical-case RareBench evaluation green; write the exact run ID and numbers here once verified
-- [ ] GitHub changes merged into main after checks
-- [ ] Physical Apple M5 local installation, training, reload and user interface verified
+- [x] Source code changes and regression tests implemented in review PR #6.
+- [x] Ubuntu and Apple Silicon model unit CI passed on the reviewed code: [run 44485188344](https://github.com/uday8116/RareGenXAI/actions/runs/44485188344).
+- [x] Official HPO training workflow passed, producing saved model v2, verified provenance and a 14-day downloadable artifact: [trained-model artifact](https://github.com/uday8116/RareGenXAI/actions/runs/44485188344/artifacts/14509703545).
+- [x] Full repository integration workflow passed on the reviewed code before the last documentation-only changes: [run 44485031391](https://github.com/uday8116/RareGenXAI/actions/runs/44485031391). Check the PR for additional runs on the documentation commit.
+- [x] Revised identical-case RareBench evaluation completed: [run 44484831306](https://github.com/uday8116/RareGenXAI/actions/runs/44484831306), 178 eligible cases.
+- [ ] Physical Apple M5 local installation, training, reload and user interface verification is owned by the user and cannot be confirmed through GitHub.
+
+### Reviewed external benchmark (178 eligible published RareBench cases)
+
+| Ranking method | Top-1 | Top-5 |
+| --- | ---: | ---: |
+| Exact HPO overlap | 37.64% | 54.49% |
+| XGBoost | 37.64% | 48.88% |
+| Random Forest | 34.27% | 41.57% |
+| Logistic Regression | 32.58% | 47.19% |
+| TF-IDF | 29.78% | 43.26% |
+| MLP | 26.40% | 32.02% |
+
+The top-40 candidate retrieval recall for supervised methods was 63.48%, despite 99.44% recorded disease-ID coverage in the knowledge base. The exact-overlap method searches a larger candidate universe, so comparisons need that qualification. The synthetic training queries and public RareBench cases are not a clinical trial; no model should be described as a validated diagnostic tool.
+
+**Release note:** This report covers the Phase 3 review PR #6. See its merged status and associated checks on GitHub; local M5 completion remains independent of the repository merge.
 
 A green workflow confirms a GitHub runner, **not** that the user's own laptop executed the scripts.
 
