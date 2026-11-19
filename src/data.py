@@ -1,6 +1,9 @@
 """Download and parse official HPO ontology and disease annotations."""
 from pathlib import Path
 import hashlib
+import os
+import time
+import uuid
 import json
 import requests
 import pandas as pd
@@ -14,21 +17,56 @@ URLS = {
 }
 
 def download(force=False):
+    """Download official HPO data with retry and atomic output files.
+
+    Failed/interrupted network transfers never replace an existing good file,
+    and temporary partial files are cleaned up. Retrying transient HTTP and
+    network errors helps when the official PURLs disconnect under CI load.
+    """
     RAW.mkdir(parents=True, exist_ok=True)
     manifest = {}
     for name, url in URLS.items():
         target = RAW / name
         if force or not target.exists():
-            with requests.get(url, stream=True, timeout=120) as response:
-                response.raise_for_status()
-                with target.open("wb") as out:
-                    for chunk in response.iter_content(1024 * 1024):
-                        if chunk:
-                            out.write(chunk)
+            temp = RAW / f".{name}.{uuid.uuid4().hex}.partial"
+            last_error = None
+            try:
+                for attempt in range(4):
+                    try:
+                        with requests.get(url, stream=True, timeout=120) as response:
+                            response.raise_for_status()
+                            with temp.open("wb") as out:
+                                for chunk in response.iter_content(1024 * 1024):
+                                    if chunk:
+                                        out.write(chunk)
+                        if temp.stat().st_size < 1000:
+                            raise ValueError(f"Unexpectedly small download: {temp}")
+                        os.replace(temp, target)
+                        last_error = None
+                        break
+                    except requests.RequestException as exc:
+                        last_error = exc
+                        temp.unlink(missing_ok=True)
+                        if attempt < 3:
+                            time.sleep(2 ** attempt)
+                if last_error is not None:
+                    raise RuntimeError(f"Could not download official HPO {name} after four attempts") from last_error
+            finally:
+                temp.unlink(missing_ok=True)
         if target.stat().st_size < 1000:
             raise ValueError(f"Unexpectedly small download: {target}")
-        manifest[name] = {"url": url, "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "bytes": target.stat().st_size}
-    (RAW / "manifest.json").write_text(json.dumps(manifest, indent=2))
+        manifest[name] = {
+            "url": url,
+            "sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+            "bytes": target.stat().st_size,
+        }
+    manifest_path = RAW / "manifest.json"
+    temp_manifest = RAW / f".manifest.{uuid.uuid4().hex}.partial"
+    try:
+        temp_manifest.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        os.replace(temp_manifest, manifest_path)
+    finally:
+        temp_manifest.unlink(missing_ok=True)
     return manifest
 
 def load_annotations(path=RAW / "phenotype.hpoa"):

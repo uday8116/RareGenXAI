@@ -8,7 +8,15 @@ on:
       - 'src/ml.py'
       - 'src/paired_stats.py'
       - 'src/train_ml.py'
+      - 'src/model_bundle.py'
+      - 'src/verify_models.py'
       - '.github/workflows/external.yml'
+env:
+  PYTHONHASHSEED: '42'
+  OMP_NUM_THREADS: '1'
+  OPENBLAS_NUM_THREADS: '1'
+  MKL_NUM_THREADS: '1'
+
 jobs:
   patient_benchmark:
     runs-on: ubuntu-latest
@@ -22,8 +30,14 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Prepare official HPO annotations
         run: python -m src.data
-      - name: Train ML models on synthetic disease profiles
-        run: python -m src.train_ml --train-diseases 200 --test-diseases 60 --queries-per-disease 2
+      - name: Build versioned HPO knowledge base
+        run: |
+          python -m src.knowledge_db build
+          python -m src.knowledge_db verify --raw-dir data/raw
+      - name: Train and verify synthetic HPO model bundle
+        run: |
+          python -m src.train_ml --seed 42 --train-diseases 600 --test-diseases 120 --queries-per-disease 2 --candidates 40
+          python -m src.verify_models --db data/local/raregen.sqlite3 --raw-dir data/raw
       - name: Fetch published patient test cases
         run: python -m src.rarebench --limit-per-subset 100000
       - name: Evaluate independent published cases
@@ -41,4 +55,7 @@ jobs:
             results/external_cohort_summary.csv
             results/external_paired_bootstrap.csv
             results/ml_summary.csv
+            models/raregen_ml.manifest.json
+            data/raw/manifest.json
+            results/ml_metadata.json
           if-no-files-found: warn
