@@ -69,9 +69,22 @@ class RareGenML:
         similarities = (self.matrix @ query.T).toarray().reshape(-1)
         if not np.any(similarities > 0):
             return []
-        count = min(k, len(self.ids))
-        indices = np.argpartition(-similarities, count - 1)[:count]
-        ordered = sorted(indices, key=lambda i: (-float(similarities[i]), self.ids[i]))
+        # Only clinically relevant *matched* candidates are retrieved. The
+        # previous argpartition filled the shortlist with arbitrary zero-score
+        # diseases and could break ties nondeterministically at position k.
+        positive_indices = np.flatnonzero(similarities > 0)
+        count = min(k, len(positive_indices))
+        if count == len(positive_indices):
+            candidates = positive_indices
+        else:
+            positive_scores = similarities[positive_indices]
+            # Include every tie at the cut-off before applying a stable
+            # score-descending / disease-ID-ascending ordering.
+            cutoff = -np.partition(-positive_scores, count - 1)[count - 1]
+            candidates = positive_indices[positive_scores >= cutoff]
+        ordered = sorted(
+            candidates, key=lambda i: (-float(similarities[i]), self.ids[i])
+        )[:count]
         return [(self.ids[i], float(similarities[i])) for i in ordered]
 
     def features(self, observations, disease, similarity):
@@ -124,7 +137,19 @@ class RareGenML:
                 observations = synthetic_observations(disease, self.profiles, rng)
                 candidates_by_id = dict(self.retrieve(observations, k=candidates))
                 if disease not in candidates_by_id:
+                    # Training labels may include a forced positive, but
+                    # held-out evaluation never inserts the correct answer.
                     candidates_by_id[disease] = self._tfidf_for(observations, disease)
+                # Hard and random negatives are part of synthetic *training*,
+                # not of inference retrieval. Keep zero-similarity diseases
+                # out of predictions while still teaching the classifier
+                # to reject unrelated candidates.
+                shortfall = min(candidates, len(self.ids)) - len(candidates_by_id)
+                if shortfall > 0:
+                    unused = [candidate for candidate in self.ids
+                              if candidate not in candidates_by_id]
+                    for candidate in rng.sample(unused, min(shortfall, len(unused))):
+                        candidates_by_id[candidate] = 0.0
                 for candidate_id, score in candidates_by_id.items():
                     x.append(self.features(observations, candidate_id, score))
                     y.append(int(candidate_id == disease))
@@ -159,6 +184,8 @@ class RareGenML:
                     "queries_per_disease": queries_per_disease, "candidates": candidates,
                     "features": FEATURES, "training_pairs": len(y),
                     "training_feature_matrix_sha256": training_input_sha256,
+                    "retrieval_policy": "positive_tfidf_only_ties_by_disease_id",
+                    "training_negative_policy": "seeded_uniform_padding_training_only",
                     "train_disease_ids": sorted(training),
                     "heldout_disease_ids": sorted(heldout),
                     "validation_kind": "synthetic_disease_disjoint_not_patient_level",
