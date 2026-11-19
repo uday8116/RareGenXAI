@@ -127,3 +127,15 @@ def test_repeated_training_uses_identical_example_matrix():
     assert a_meta["train_disease_ids"] == b_meta["train_disease_ids"]
     assert a_rows == b_rows
     assert a_summary == b_summary
+
+
+def test_legacy_bundle_schema_must_be_retrained(fitted, tmp_path):
+    model, meta = fitted
+    path = tmp_path / "model.joblib"
+    save_verified_bundle(model, path, training=meta, source={"kind": "unit_test"})
+    manifest_path = path.with_suffix(".manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["manifest_schema"] = 1
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    with pytest.raises(ValueError, match="Unsupported model manifest schema"):
+        load_verified_bundle(path)
