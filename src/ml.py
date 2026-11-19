@@ -62,6 +62,8 @@ class RareGenML:
         positive = [term for term, status in observations if status in ("confirmed_present", "suspected_present")]
         if not positive:
             return []
+        if not isinstance(k, int) or k < 1:
+            raise ValueError("Retrieval candidate limit k must be positive")
         query = self.vectorizer.transform([" ".join(term.replace(":", "_") for term in positive)])
         similarities = (self.matrix @ query.T).toarray().reshape(-1)
         if not np.any(similarities > 0):
@@ -103,6 +105,9 @@ class RareGenML:
         Training candidate pairs can include the ground truth explicitly. Held-out
         evaluation NEVER forces the correct disease into the candidate shortlist.
         """
+        if any(not isinstance(value, int) or value < 1 for value in
+               (train_diseases, test_diseases, queries_per_disease, candidates)):
+            raise ValueError("Training sizes and candidate count must be positive integers")
         rng = random.Random(seed)
         eligible = sorted(k for k in self.ids if len(self.profiles[k]) >= 4)
         rng.shuffle(eligible)
@@ -147,7 +152,10 @@ class RareGenML:
         metadata = {"seed": seed, "train_diseases": len(training), "heldout_diseases": len(heldout),
                     "queries_per_disease": queries_per_disease, "candidates": candidates,
                     "features": FEATURES, "training_pairs": len(y),
-                    "validation_kind": "synthetic_disease_disjoint_not_patient_level"}
+                    "train_disease_ids": sorted(training),
+                    "heldout_disease_ids": sorted(heldout),
+                    "validation_kind": "synthetic_disease_disjoint_not_patient_level",
+                    "test_truth_never_forced_into_retrieval": True}
         return details, summary, metadata
 
     def _tfidf_for(self, observations, disease):

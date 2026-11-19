@@ -5,7 +5,7 @@ import streamlit as st
 from src.data import load_ontology
 from src.ranking import ontology_parents, information_content, rank
 from src.ml import RareGenML
-import joblib
+from src.model_bundle import load_verified_bundle
 
 st.set_page_config(page_title="RareGen XAI", page_icon="🧬", layout="wide")
 st.title("🧬 RareGen XAI")
@@ -72,7 +72,13 @@ quality = st.checkbox("Use proposed evidence-quality weights", value=True,
 def ml_resources():
     model_file = Path("models/raregen_ml.joblib")
     if model_file.exists():
-        return joblib.load(model_file)
+        try:
+            model, _ = load_verified_bundle(model_file)
+            return model
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            st.error("Saved ML artifact failed verification. Retrain with: python -m src.train_ml")
+            st.caption(str(exc))
+            st.stop()
     return RareGenML(profiles, data["labels"])
 
 if st.button("Rank candidate disorders", type="primary"):

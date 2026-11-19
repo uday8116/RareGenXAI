@@ -6,10 +6,8 @@ Cases must be licensed, de-identified, and independent of synthetic training.
 """
 import argparse
 import csv
-import json
 from pathlib import Path
-import joblib
-from src.ml import RareGenML
+from src.model_bundle import load_verified_bundle
 from src.ranking import ontology_parents, information_content, rank
 from src.data import load_ontology
 
@@ -22,8 +20,12 @@ def read_cases(path):
     required = {"case_id", "disease_id", "hpo_ids"}
     if not required.issubset(rows[0]):
         raise ValueError(f"Required columns: {sorted(required)}")
-    if len({r["case_id"] for r in rows}) != len(rows):
-        raise ValueError("Duplicate case IDs")
+    case_ids = [str(r.get("case_id", "")).strip() for r in rows]
+    if not all(case_ids) or len(set(case_ids)) != len(rows):
+        raise ValueError("Empty or duplicate case IDs")
+    for record in rows:
+        if not str(record.get("disease_id", "")).strip() or not str(record.get("hpo_ids", "")).strip():
+            raise ValueError("Cases must have nonempty disease IDs and HPO terms")
     return rows
 
 
@@ -37,6 +39,7 @@ def score_rank(ids, target):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--cases", required=True)
+    parser.add_argument("--model", default="models/raregen_ml.joblib", help="Trusted local model bundle")
     parser.add_argument("--deeprare", default=None, help="Optional independent DeepRare predictions, same cases")
     parser.add_argument("--out", default="results/external_case_results.csv")
     parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap", "semantic", "quality_semantic"])
@@ -45,15 +48,25 @@ def main():
     cases = read_cases(args.cases)
     if args.max_cases > 0:
         cases = cases[:args.max_cases]
-    data = json.loads(Path("data/processed/profiles.json").read_text())
-    profiles = {k: set(v) for k, v in data["profiles"].items()}
-    labels = data["labels"]
-    ml_path = Path("models/raregen_ml.joblib")
-    ml = joblib.load(ml_path) if ml_path.exists() else RareGenML(profiles, labels)
+    if not cases:
+        raise ValueError("No cases selected for evaluation")
+    # Use the exact same candidate disease universe and HPO evidence snapshot
+    # for knowledge baselines and supervised models.
+    ml, manifest = load_verified_bundle(args.model)
+    profiles = ml.profiles
+    labels = ml.labels
     comparison = {}
     if args.deeprare:
         with open(args.deeprare, newline="") as f:
-            comparison = {r["case_id"]: r["ranked_disease_ids"].split(";") for r in csv.DictReader(f)}
+            comparison = {}
+            for row in csv.DictReader(f):
+                case_id = str(row.get("case_id", "")).strip()
+                if not case_id or case_id in comparison:
+                    raise ValueError(f"Empty or duplicate DeepRare case ID: {case_id!r}")
+                ranks = [x.strip() for x in str(row.get("ranked_disease_ids") or "").split(";")]
+                if not ranks or any(not x for x in ranks) or len(set(ranks)) != len(ranks):
+                    raise ValueError(f"Invalid DeepRare ranking for case {case_id}")
+                comparison[case_id] = ranks
         if set(comparison) != {r["case_id"] for r in cases}:
             raise ValueError("DeepRare case IDs must match exactly; no unmatched comparison allowed")
     needs_ontology = any(m in args.methods for m in ("semantic", "quality_semantic"))
