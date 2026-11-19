@@ -9,11 +9,15 @@ persists observations. Do NOT bind to 0.0.0.0 or expose it to the internet.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Path as URLPath, Query, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.api_schemas import (
     DiseaseDetail, DiseaseMatch, KnowledgeStats, ModelStatus,
@@ -25,7 +29,7 @@ from src.db_access import (
     search_diseases, search_phenotypes,
 )
 from src.ml import FEATURES
-from src.ranking import rank as baseline_rank
+from src.ranking import ancestors, rank as baseline_rank
 
 
 API_PREFIX = "/api/v1"
@@ -55,13 +59,35 @@ def create_app(
         allow_credentials=False, allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"], max_age=600,
     )
+    # CORS only controls browsers; these guards enforce local-only access
+    # even if uvicorn is accidentally started with --host 0.0.0.0.
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["localhost", "127.0.0.1", "testserver"],
+    )
+
+    @app.middleware("http")
+    async def restrict_to_loopback(request: Request, call_next):
+        peer = request.client.host if request.client else None
+        if peer != "testclient":
+            try:
+                allowed = peer is not None and ip_address(peer).is_loopback
+            except ValueError:
+                allowed = False
+            if not allowed:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Local-only research API: remote clients are not allowed"},
+                )
+        return await call_next(request)
+
     service = ResearchService(db_path, model_path)
     app.state.research_service = service
 
     def database_or_503():
         try:
             return service.context()
-        except (FileNotFoundError, OSError, ValueError, sqlite3.DatabaseError) as exc:
+        except (FileNotFoundError, OSError, ValueError, KeyError, TypeError, sqlite3.DatabaseError) as exc:
             raise HTTPException(
                 status_code=503,
                 detail="Local HPO knowledge unavailable. Run python -m src.data and python -m src.knowledge_db build",
@@ -74,6 +100,18 @@ def create_app(
             raise HTTPException(
                 status_code=503,
                 detail="Verified local trained model unavailable or incompatible. Run python -m src.train_ml",
+            ) from exc
+
+    @contextmanager
+    def read_connection():
+        """Return 503 (not a leaking trace) when the DB changes mid-request."""
+        try:
+            with open_readonly(service.db_path) as conn:
+                yield conn
+        except (FileNotFoundError, OSError, sqlite3.DatabaseError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Local HPO database is unavailable during this request",
             ) from exc
 
     @app.get(API_PREFIX + "/health", tags=["System"])
@@ -109,7 +147,7 @@ def create_app(
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             return search_phenotypes(conn, q, limit)
 
     @app.get(API_PREFIX + "/phenotypes/{hpo_id}", response_model=Phenotype, tags=["Phenotypes"])
@@ -117,7 +155,7 @@ def create_app(
         hpo_id: Annotated[str, URLPath(pattern=r"^HP:\d{7}$")],
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             found = phenotype(conn, hpo_id)
         if found is None:
             raise HTTPException(404, "HPO ID not found in the local ontology")
@@ -129,7 +167,7 @@ def create_app(
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             return search_diseases(conn, q, limit)
 
     @app.get(API_PREFIX + "/diseases/{disease_id}", response_model=DiseaseDetail, tags=["Diseases"])
@@ -137,7 +175,7 @@ def create_app(
         disease_id: Annotated[str, URLPath(min_length=3, max_length=80, pattern=r"^[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_.-]+$")],
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             found = disease_detail(conn, disease_id)
         if found is None:
             raise HTTPException(404, "Disease ID not found in the local annotations")
@@ -154,7 +192,7 @@ def create_app(
         context = database_or_503()
         normalized = []
         seen = set()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             for item in payload.observations:
                 term = phenotype(conn, item.hpo_id)
                 if term is None:
@@ -162,6 +200,14 @@ def create_app(
                 if term["is_obsolete"]:
                     raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
                 canonical = term["hpo_id"]
+                # Only actual clinical phenotype terms under HP:0000118 are
+                # eligible for disease ranking. Inheritance/mode of transmission
+                # and ontology root headings are not patient symptom findings.
+                if (canonical == "HP:0000118" or
+                        "HP:0000118" not in ancestors(canonical, context["parents"])):
+                    raise HTTPException(
+                        422, "HPO ID is not a clinical phenotypic abnormality"
+                    )
                 if canonical in seen:
                     raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
                 seen.add(canonical)
@@ -178,6 +224,11 @@ def create_app(
                 quality=payload.quality, top_k=payload.top_k,
             )
             for row in rows:
+                # Baselines otherwise return unrelated zero/negative-score
+                # candidates merely to fill top_k. Do not imply a disease
+                # match when there is no positive ranking evidence.
+                if row["score"] <= 0:
+                    continue
                 matches = sorted(positive & context["profiles"].get(row["disease_id"], set()))
                 result.append({
                     "disease_id": row["disease_id"],
