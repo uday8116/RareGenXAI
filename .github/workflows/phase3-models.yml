@@ -14,6 +14,7 @@ on:
       - 'tests/test_data_download.py'
       - '.github/workflows/phase3-models.yml'
       - 'docs/PHASE_03_MODELS.md'
+      - 'docs/PHASE_03_REVIEW.md'
   pull_request:
     paths:
       - 'src/ml.py'

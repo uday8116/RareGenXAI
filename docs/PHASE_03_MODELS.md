@@ -83,4 +83,4 @@ print(ranked)
 6. Automated unit tests and official source training workflow pass.
 7. Owner runs installation and trusted bundle verification on actual M5 Mac.
 
-The GitHub CI build is evidence for code correctness on its runner; it does not prove local Mac setup is complete or that medical performance is clinically validated.
+The GitHub CI build is evidence for code correctness on its runner; it does not prove local Mac setup is complete or that medical performance is clinically validated. See [Phase 3 audit and verified synthetic/RareBench results](PHASE_03_REVIEW.md) for actual measured results and unresolved limitations.
