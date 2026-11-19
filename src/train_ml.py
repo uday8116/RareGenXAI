@@ -70,7 +70,11 @@ def train_pipeline(args: argparse.Namespace) -> dict:
         "model_file": str(args.output),
         "manifest": str(Path(args.output).with_suffix(".manifest.json")),
         "sha256": manifest["artifact_sha256"],
-        "training": metadata,
+        "seed": args.seed,
+        "train_diseases": metadata["train_diseases"],
+        "heldout_diseases": metadata["heldout_diseases"],
+        "training_pairs": metadata["training_pairs"],
+        "validation_kind": metadata["validation_kind"],
     }, indent=2))
     return manifest
 

@@ -108,3 +108,17 @@ Phase 2 provides a versioned, reproducible SQLite knowledge base using official 
 ```
 
 Run `.venv/bin/python -m src.knowledge_db build --replace` to deliberately replace an existing local database after validation, especially when upgrading from schema v1 to schema v2. Back up the old local file first. The default database is `data/local/raregen.sqlite3` (ignored by Git). See [Phase 2 database and search documentation](docs/PHASE_02_DATA_DATABASE.md).
+
+## Phase 3: trained ML models and reproducible verification
+
+The Phase 3 workflow fits TF-IDF retrieval and four supervised rerankers (Logistic Regression, Random Forest, XGBoost, MLP) on **synthetic phenotype queries from the official Phase 2 SQLite database**. This is disease-disjoint synthetic validation, not patient-level or clinical diagnosis accuracy.
+
+```bash
+# Requires Phase 2 database built (schema v2)
+.venv/bin/python -m src.train_ml --seed 42 --train-diseases 600 --test-diseases 120 --queries-per-disease 2 --candidates 40
+.venv/bin/python -m src.verify_models --raw-dir data/raw
+```
+
+The saved model lives at `models/raregen_ml.joblib` with a matching `models/raregen_ml.manifest.json`. The manifest verifies file integrity and input dataset provenance, and a fresh load must reproduce stored predictions. All binary models stay out of Git and are available in the Phase 3 GitHub workflow as a short-lived artifact. See [Phase 3 model training guide](docs/PHASE_03_MODELS.md).
+
+**Important:** Only load trusted local or trusted project CI joblib files. ML ranking scores are not calibrated probabilities.

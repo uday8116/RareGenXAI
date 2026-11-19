@@ -40,7 +40,7 @@ def fetch_cases(subsets=("LIRICAL", "MME", "HMS"), limit_per_subset=30):
                 terms = raw.get("Phenotype", [])
                 diagnoses = raw.get("RareDisease", [])
                 if isinstance(terms, str):
-                    terms = re.findall(r"HP:\\d+", terms)
+                    terms = re.findall(r"HP:\d+", terms)
                 if isinstance(diagnoses, str):
                     diagnoses = [diagnoses]
                 if not isinstance(terms, list) or not isinstance(diagnoses, list):

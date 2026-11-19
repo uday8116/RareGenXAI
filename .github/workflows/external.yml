@@ -8,6 +8,8 @@ on:
       - 'src/ml.py'
       - 'src/paired_stats.py'
       - 'src/train_ml.py'
+      - 'src/model_bundle.py'
+      - 'src/verify_models.py'
       - '.github/workflows/external.yml'
 jobs:
   patient_benchmark:
