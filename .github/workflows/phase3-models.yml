@@ -1,0 +1,73 @@
+name: Phase 3 Model Training and Verification
+
+on:
+  push:
+    paths:
+      - 'src/ml.py'
+      - 'src/model_bundle.py'
+      - 'src/train_ml.py'
+      - 'src/verify_models.py'
+      - 'src/db_access.py'
+      - 'tests/test_ml.py'
+      - 'tests/test_model_bundle.py'
+      - '.github/workflows/phase3-models.yml'
+      - 'docs/PHASE_03_MODELS.md'
+  pull_request:
+    paths:
+      - 'src/ml.py'
+      - 'src/model_bundle.py'
+      - 'src/train_ml.py'
+      - 'src/verify_models.py'
+      - 'src/db_access.py'
+      - 'tests/test_ml.py'
+      - 'tests/test_model_bundle.py'
+      - '.github/workflows/phase3-models.yml'
+      - 'docs/PHASE_03_MODELS.md'
+  workflow_dispatch:
+
+jobs:
+  model-unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install model dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Test ML, model bundling and reload integrity
+        run: python -m pytest -q tests/test_ml.py tests/test_model_bundle.py
+
+  official-dataset-training:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install model dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Prepare validated official HPO knowledge base
+        run: |
+          python -m src.data
+          python -m src.knowledge_db build
+          python -m src.knowledge_db verify --raw-dir data/raw
+      - name: Fit four rerankers and save trusted local bundle
+        run: python -m src.train_ml --seed 42 --train-diseases 600 --test-diseases 120 --queries-per-disease 2 --candidates 40
+      - name: Verify saved model, data provenance and synthetic evaluation
+        run: python -m src.verify_models --raw-dir data/raw
+      - name: Upload trained-model package and measurement files
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-synthetic-hpo-trained-model-ubuntu
+          path: |
+            models/raregen_ml.joblib
+            models/raregen_ml.manifest.json
+            results/ml_trials.csv
+            results/ml_summary.csv
+            results/ml_metadata.json
+            data/raw/manifest.json
+          if-no-files-found: error
+          retention-days: 14
