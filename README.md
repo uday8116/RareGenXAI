@@ -122,3 +122,19 @@ The Phase 3 workflow fits TF-IDF retrieval and four supervised rerankers (Logist
 The saved model lives at `models/raregen_ml.joblib` with a matching `models/raregen_ml.manifest.json`. The manifest verifies file integrity and input dataset provenance, and a fresh load must reproduce stored predictions. All binary models stay out of Git and are available in the Phase 3 GitHub workflow as a short-lived artifact. See [Phase 3 model training guide](docs/PHASE_03_MODELS.md), [historical Phase 3 metrics](docs/PHASE_03_REVIEW.md), and [Phase 3 independent correctness review](docs/PHASE_03_FINAL_AUDIT.md).
 
 **Important:** Only load trusted local or trusted project CI joblib files. ML ranking scores are not calibrated probabilities.
+
+
+## Phase 4: locally running FastAPI backend
+
+The versioned read-only HTTP API connects Phase 2 SQLite, Phase 3 trusted models and the next-phase frontend. It is **not** a hosted website or a clinical diagnostic system.
+
+~~~bash
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+# Requires local HPO SQLite knowledge and, for ML endpoints, a trained verified model.
+bash scripts/start_api.sh
+~~~
+
+Open **http://127.0.0.1:8000/docs** for interactive Swagger/OpenAPI documentation, **http://127.0.0.1:8000/redoc** for the reference, or **http://127.0.0.1:8000/api/v1/health** for liveness. Versioned APIs include phenotype and disease search, knowledge statistics, model readiness, and explainable research ranking.
+
+The server binds to loopback only and never stores patient observations. No AWS, Railway or external database is needed. See [Phase 4 backend plan and API documentation](docs/PHASE_04_BACKEND.md). The professional website and model dashboard remain a separate frontend phase.
