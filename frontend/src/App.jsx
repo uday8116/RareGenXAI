@@ -197,6 +197,7 @@ function PhenotypePicker({ observations, setObservations, disabled }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [validation, setValidation] = useState('');
+  const [activeOption, setActiveOption] = useState(0);
   const inputRef = useRef(null);
 
   useEffect(() => {
@@ -206,6 +207,7 @@ function PhenotypePicker({ observations, setObservations, disabled }) {
       setState('loading');
       api.phenotypes(query.trim(), controller.signal).then((rows) => {
         setResults(rows.filter((r) => !r.is_obsolete));
+        setActiveOption(0);
         setState('done');
         setError('');
       }).catch((err) => {
@@ -236,23 +238,34 @@ function PhenotypePicker({ observations, setObservations, disabled }) {
     <label htmlFor="phenotype-search" className="form-label">Add clinical phenotype</label>
     <div className="search-field"><Search size={19} aria-hidden="true"/><input id="phenotype-search" ref={inputRef}
       autoComplete="off" value={query} disabled={disabled} placeholder="Search seizures, developmental delay, HP:0001250..."
-      onChange={(e) => { setQuery(e.target.value); setOpen(true); setValidation(''); }}
+      onChange={(e) => { setQuery(e.target.value); setOpen(true); setActiveOption(0); setValidation(''); }}
       onKeyDown={(e) => {
         if (e.key === 'Escape') { setOpen(false); return; }
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          setOpen(true);
+          if (results.length > 0) {
+            setActiveOption((i) => (i + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length);
+          }
+          return;
+        }
         if (e.key === 'Enter' && open && query.trim().length >= 2) {
           e.preventDefault();
-          if (state === 'done' && results.length > 0) add(results[0]);
+          if (state === 'done' && results.length > 0) add(results[activeOption]);
         }
       }}
       onFocus={() => setOpen(true)} aria-expanded={open && query.length >= 2}
-      aria-autocomplete="list" aria-controls="phenotype-options" role="combobox" />
+      aria-autocomplete="list"
+      aria-activedescendant={open && state === 'done' && results[activeOption] ? 'hpo-option-' + results[activeOption].hpo_id : undefined}
+      aria-controls="phenotype-options" role="combobox" />
       {query && <button type="button" aria-label="Clear phenotype search" onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}><X size={16}/></button>}
     </div>
     {open && query.trim().length >= 2 && !disabled && <div className="search-popover" id="phenotype-options" role="listbox">
       {state === 'loading' && <div className="search-feedback"><Spinner label="Searching HPO terms"/></div>}
       {state === 'error' && <div className="search-feedback">{error}</div>}
       {state === 'done' && results.length === 0 && <div className="search-feedback">No matching active HPO terms found.</div>}
-      {state === 'done' && results.map((term) => <button className="search-option" role="option" aria-selected={false} key={term.hpo_id} type="button" onClick={() => add(term)}>
+      {state === 'done' && results.map((term, i) => <button id={'hpo-option-' + term.hpo_id} className={'search-option' + (i === activeOption ? ' selected' : '')}
+        role="option" aria-selected={i === activeOption} key={term.hpo_id} type="button" onMouseEnter={() => setActiveOption(i)} onClick={() => add(term)}>
         <span><strong>{term.name}</strong><small>{term.hpo_id}</small></span><Plus size={17}/></button>)}
     </div>}
     <div className="field-hint"><span>Use official Human Phenotype Ontology terminology.</span>
@@ -426,7 +439,7 @@ function Explorer({ backend }) {
   useEffect(() => {
     if (!selected || !isOnline) { setDetails(null); return; }
     let active = true;
-    setLoadingDetails(true); setDetailError('');
+    setLoadingDetails(true); setDetailError(''); setDetails(null);
     api.disease(selected).then((data) => { if (active) setDetails(data); })
       .catch((err) => { if (active) { setDetails(null); setDetailError(err.message); } })
       .finally(() => { if (active) setLoadingDetails(false); });
@@ -438,7 +451,7 @@ function Explorer({ backend }) {
     <div className="explorer-layout">
       <Panel title="Find a rare disorder" subtitle="Search by disease name or known identifier.">
         <label htmlFor="disease-search" className="form-label">Search disease knowledge</label>
-        <div className="search-field"><Search size={19}/><input id="disease-search" value={query} disabled={!isOnline} onChange={(e) => setQuery(e.target.value)}
+        <div className="search-field"><Search size={19}/><input id="disease-search" value={query} disabled={!isOnline} onChange={(e) => { setQuery(e.target.value); setMatches([]); setSearchError(''); }}
           placeholder="Search Marfan, ORPHA:..., MIM:..." autoComplete="off" /></div>
         {searching && <p className="small-status"><Spinner label="Searching diseases"/></p>}
         {searchError && <Alert tone="error">{searchError}</Alert>}
