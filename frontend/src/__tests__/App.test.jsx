@@ -47,7 +47,36 @@ function apiMock() {
       disease_id:'MIM:1234',name:'Synthetic example syndrome',
       phenotypes:[{hpo_id:'HP:0001250',hpo_name:'Seizure',is_negated:0,reference_id:'PMID:123',aspect:'P'}],
     });
-    if (url === '/api/v1/rank') return mockJson(rankFixture);
+    if (url === '/api/v1/explain') {
+      const requested = JSON.parse(options.body);
+      return mockJson({
+        method: requested.method, disease_id: requested.disease_id,
+        disease_name:'Synthetic example syndrome',
+        explanation_type: requested.method === 'overlap' || requested.method === 'semantic'
+          ? 'signed_ontology_contributions' : 'ontology_context_not_ml_attribution',
+        model_sha256: requested.method === 'overlap' || requested.method === 'semantic' ? null : 'a'.repeat(64),
+        reconstructed_baseline_score: requested.method === 'overlap' || requested.method === 'semantic' ? 0.75 : null,
+        evidence: [
+          {hpo_id:'HP:0001250',status:'confirmed_present',relation:'exact',
+           best_disease_hpo_id:'HP:0001250',shared_ancestor_hpo_id:null,
+           match:1,evidence_weight:1,contribution: requested.method === 'overlap' || requested.method === 'semantic' ? 0.75 : null},
+          {hpo_id:'HP:0001263',status:'suspected_present',relation:'none',
+           best_disease_hpo_id:null,shared_ancestor_hpo_id:null,
+           match:0,evidence_weight:0.4,contribution: requested.method === 'overlap' || requested.method === 'semantic' ? 0 : null},
+        ],
+        disclaimer:'Research-only; not a diagnosis, probability or SHAP attribution.',
+      });
+    }
+    if (url === '/api/v1/rank') {
+      const payload = JSON.parse(options.body);
+      if (payload.observations.length === 1) {
+        return mockJson({...rankFixture, method:payload.method, results:[{
+          disease_id:'MIM:5678', disease_name:'Different hypothetical disorder', score:0.55,
+          matched_hpo:['HP:0001263'],evidence:[],
+        }]});
+      }
+      return mockJson({...rankFixture,method:payload.method});
+    }
     throw new Error('Unexpected endpoint: ' + url + ' ' + String(options?.method));
   });
 }
@@ -120,6 +149,63 @@ describe('Phase 5 website', () => {
         {hpo_id:'HP:0001263',status:'suspected_present'},
       ],
     });
+  });
+
+  it('renders Phase 6 ontology trace from the actual explain API response', async () => {
+    const user = userEvent.setup();
+    const fetchMock = apiMock();
+    vi.stubGlobal('fetch', fetchMock);
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    expect(await screen.findByRole('heading',{name:'Explainability laboratory'})).toBeInTheDocument();
+    expect(await screen.findByText('Signed baseline evidence')).toBeInTheDocument();
+    expect(screen.getByText(/nearest disease annotation: HP:0001250/i)).toBeInTheDocument();
+    expect(screen.getByText(/consistent with baseline score/i)).toBeInTheDocument();
+    const explainCall = fetchMock.mock.calls.find(([url]) => url === '/api/v1/explain');
+    expect(JSON.parse(explainCall[1].body).disease_id).toBe('MIM:1234');
+    expect(explainCall[1].credentials).toBe('omit');
+  });
+
+  it('compares two actual same-case method responses without reporting accuracy', async () => {
+    const user = userEvent.setup();
+    const fetchMock = apiMock();
+    vi.stubGlobal('fetch', fetchMock);
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    await screen.findByRole('heading',{name:'Explainability laboratory'});
+    await user.click(screen.getByRole('tab',{name:/same-case model comparison/i}));
+    await user.click(screen.getByRole('button',{name:/compare methods on these HPO findings/i}));
+    expect(await screen.findByText(/methods share a leading candidate/i)).toBeInTheDocument();
+    expect(screen.getByText(/top-candidate agreement/i)).toBeInTheDocument();
+    const runs = fetchMock.mock.calls.filter(([url])=>url === '/api/v1/rank')
+      .map(([_url,opts])=>JSON.parse(opts.body));
+    expect(runs.length).toBeGreaterThanOrEqual(3);
+    const compared = runs.slice(1);
+    expect(compared.map((r)=>r.method)).toEqual(['overlap','semantic']);
+    expect(compared[0].observations).toEqual(compared[1].observations);
+  });
+
+  it('runs bounded sensitivity after omitting one HPO phenotype', async () => {
+    const user = userEvent.setup();
+    const fetchMock = apiMock();
+    vi.stubGlobal('fetch', fetchMock);
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    await screen.findByRole('heading',{name:'Explainability laboratory'});
+    await user.click(screen.getByRole('tab',{name:/what-if sensitivity/i}));
+    await user.click(screen.getByRole('button',{name:/rerun without selected phenotype/i}));
+    expect(await screen.findByText('Different hypothetical disorder')).toBeInTheDocument();
+    expect(screen.getByText(/outside returned top 20/i)).toBeInTheDocument();
+    const rerun = fetchMock.mock.calls.filter(([url])=>url === '/api/v1/rank').at(-1);
+    const body = JSON.parse(rerun[1].body);
+    expect(body.observations).toEqual([{hpo_id:'HP:0001263',status:'suspected_present'}]);
+    expect(body.top_k).toBe(20);
   });
 
   it('requires at least one present or suspected phenotype before submission', async () => {
