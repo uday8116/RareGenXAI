@@ -151,8 +151,9 @@ function CaseComparison({ report, observations, options, availableMethods }) {
       for (const method of selected) {
         if (controller.signal.aborted) return;
         setProgress(METHOD_LABELS[method] || method);
+        // Keep every method on the exact same output cutoff; candidate
+        // universe may still differ by retrieval method.
         const payload = rankPayload(observations, options, method);
-        payload.top_k = Math.max(5, payload.top_k);
         const ranked = await api.rank(payload, controller.signal);
         if (ranked?.method !== method || !Array.isArray(ranked.results)) {
           throw new Error('Unexpected response while comparing model outputs.');
