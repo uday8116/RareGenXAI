@@ -171,3 +171,22 @@ python scripts/smoke_phase5.py
 ```
 
 The Phase 5 PR remains unmerged until actual Node/Vitest and Vite build checks execute. The pre-execution GitHub Actions failures are not proof of test success.
+
+## Phase 6 — Explainability and same-case model comparison
+
+Phase 6 adds an auditable **Explainability Laboratory** inside the React Phenotype Workbench. Select a candidate disease to inspect exact and ontology-related HPO evidence, signed supporting/contradicting contributions for overlap/semantic baselines, and reproducible shared-ancestor links. Compare 2–4 locally available ranking methods using identical phenotype inputs, or run a one-phenotype-removed sensitivity check. These are **research ranking interpretations, not medical diagnosis or SHAP**.
+
+The local FastAPI service provides `POST /api/v1/explain` in addition to `POST /api/v1/rank`. All requests are read-only and processed on the same Mac. The new explanation endpoint never invents feature attributions for XGBoost, MLP, Random Forest or other trained methods.
+
+```bash
+source .venv/bin/activate
+python -m pytest -q tests/test_explainability.py tests/test_api.py
+cd frontend
+npm run test:logic
+npm run test
+npm run build
+```
+
+With both local servers running, open **http://127.0.0.1:5173/workbench** and run a ranking to reveal the Phase 6 panels.
+
+Full methodology, verification evidence, limitations and M5 commands are in [Phase 6 explanation and comparison guide](docs/PHASE_06_EXPLAINABILITY.md). Phase 6 is stacked on the still-open Phase 5 implementation branch. Neither phase should be treated as merged or fully verified before GitHub CI and the physical Mac checks pass.

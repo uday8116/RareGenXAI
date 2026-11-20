@@ -436,3 +436,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 @media(max-width:1150px){.xai-tab{padding:12px 10px;font-size:10px;gap:6px}.xai-summary-grid{gap:8px}.xai-mini-card{padding:11px}.xai-mini-card strong{font-size:13px}}
 @media(max-width:690px){.xai-tab-list{flex-direction:column}.xai-tab{justify-content:flex-start;border-bottom:0;border-left:3px solid transparent;min-height:42px}.xai-tab.active{border-left-color:#5ee3cb;border-bottom-color:transparent}.xai-evidence-item{grid-template-columns:1fr}.xai-lab-header{flex-direction:column;padding:18px}.xai-tab-panel{padding:18px}}
 @media(max-width:470px){.xai-summary-grid{grid-template-columns:1fr}.xai-side-by-side{grid-template-columns:1fr}.xai-between{transform:rotate(90deg);margin:auto}.xai-research-tag{font-size:8px}.xai-composition{gap:9px}.xai-check{margin-left:0}}
+
+
+/* Phase 6 live case-comparison entry point on Model Laboratory */
+.xai-model-launch{display:flex;justify-content:space-between;align-items:center;gap:22px;background:linear-gradient(110deg,#1a4041,#152a36);border:1px solid #35665f;border-radius:13px;padding:21px 23px;margin-top:20px}
+.xai-model-launch h3{font:700 18px "Space Grotesk",sans-serif;margin:7px 0;color:#e3f5f0}
+.xai-model-launch p{font-size:11px;line-height:1.6;color:#a7c8c7;margin:0;max-width:610px}
+.xai-model-launch .button{flex:0 0 auto}
+@media(max-width:740px){.xai-model-launch{flex-direction:column;align-items:stretch}.xai-model-launch .button{width:100%}}

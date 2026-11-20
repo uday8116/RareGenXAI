@@ -47,3 +47,17 @@ npm run test:logic
 ```
 
 This uses Node 22's built-in test runner and verifies actual local API transport and safe CSV/JSON exports without fetching npm dependencies. It is **not** a React rendering or Vite build test. After obtaining the required npm packages, still run `npm run test` and `npm run build`.
+
+## Phase 6 Explainability Laboratory
+
+After running candidate disease prioritization at /workbench, the Phase 6 panel offers three tabs:
+
+1. **HPO evidence trace:** signed overlap/semantic score contributions, exact/ontology-related matched terms, shared HPO ancestors, and score consistency checks.
+2. **Same-case comparison:** real local inference for two to four available methods with exactly the same observations. Algorithm agreement is not accuracy; raw scores are not comparable across methods.
+3. **What-if sensitivity:** remove one HPO term without removing the last present/suspected observation, rerun the same model, and compare the ranking. This is not causal attribution.
+
+For trained ML methods the evidence trace is explicitly **ontology context only**, never fake SHAP or calibrated probability. The frontend calls `POST /api/v1/explain` through the local Vite proxy.
+
+Additional dependency-free tests: `npm run test:logic` (includes xai.logic.test.mjs). React UI tests and build still require `npm install && npm run test && npm run build`.
+
+See [Phase 6 guide](../docs/PHASE_06_EXPLAINABILITY.md).
