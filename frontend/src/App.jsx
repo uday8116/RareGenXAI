@@ -137,7 +137,11 @@ function Overview({ backend }) {
   const [stats, setStats] = useState(null);
   const [statsError, setStatsError] = useState('');
   useEffect(() => {
-    if (backend.state !== 'online') return;
+    if (backend.state !== 'online') {
+      setStats(null);
+      setStatsError('');
+      return;
+    }
     let live = true;
     api.stats().then((data) => { if (live) { setStats(data); setStatsError(''); } })
       .catch((err) => { if (live) setStatsError(err.message); });
