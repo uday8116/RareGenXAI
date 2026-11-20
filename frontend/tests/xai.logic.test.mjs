@@ -163,3 +163,28 @@ test('same-case model comparison rejects a changed or missing verified artifact'
   assert.throws(()=>assertConsistentModelVersions([b],a),/model changed/);
   assert.throws(()=>assertConsistentModelVersions([{method:'overlap'}]),/valid ranked result/);
 });
+
+
+test('HPO manifest fingerprint must remain identical for explanations, comparisons and ablation', () => {
+  const fingerprintA = 'a'.repeat(64);
+  const fingerprintB = 'b'.repeat(64);
+  const report = {
+    method:'overlap', knowledge_manifest_sha256:fingerprintA,
+    model_sha256:null,results:[{disease_id:'MIM:1',score:0.5}],
+  };
+  const explanation = {
+    method:'overlap',disease_id:'MIM:1',
+    knowledge_manifest_sha256:fingerprintA,
+    model_sha256:null,explanation_type:'signed_ontology_contributions',
+    reconstructed_baseline_score:0.5,evidence:[],
+  };
+  assert.equal(matchesExplanation(explanation, report, 'MIM:1'),true);
+  assert.equal(matchesExplanation({...explanation,knowledge_manifest_sha256:fingerprintB},report,'MIM:1'),false);
+  assert.equal(matchesExplanation({...explanation,knowledge_manifest_sha256:null},report,'MIM:1'),false);
+  assert.throws(()=>assertConsistentModelVersions([
+    report,{method:'semantic',knowledge_manifest_sha256:fingerprintB,results:[]},
+  ]),/HPO source snapshot changed/);
+  assert.throws(()=>assertConsistentModelVersions([
+    {method:'semantic',results:[]},
+  ], report),/HPO source snapshot changed/);
+});
