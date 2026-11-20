@@ -18,7 +18,7 @@ Phase 6 makes the model output more understandable and scientifically cautious. 
 | 6.6 | Compare algorithms using the exact same input | Phase 6 model comparison in the Phenotype Workbench, real repeated API inference |
 | 6.7 | Evaluate evidence sensitivity | One HPO observation removed and same method re-run; guarded against removing last positive |
 | 6.8 | Make frontend responsive and usable | Phase 6 tabs, candidate selector, score bars, accessible comparison tables, compact mobile layout |
-| 6.9 | Add backend/front end tests | 7 offline Python test functions, API tests, 8 Node logic cases, React integration tests |
+| 6.9 | Add backend/front end tests | 7 offline Python test functions, API tests, 9 Node logic cases, React integration tests |
 | 6.10 | Add verification and handover | This guide, dedicated Phase 6 CI and local setup instructions |
 
 ## Scientific background
@@ -158,7 +158,7 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 ## What was actually verified during implementation
 
 - **7/7 Python core explanation tests passed** in a local Python 3.11+ runtime using byte-identical copies of \`src/ranking.py\`, \`src/explainability.py\`, and \`tests/test_explainability.py\`. The files' local Git blob hashes were checked against the GitHub blob SHAs. Result: 7 passed, 0.08 s.
-- **8/8 JavaScript XAI tests passed** in an isolated V8 JavaScript evaluator running the exact GitHub helper and Node test case bodies with assertion equivalents.
+- **9/9 JavaScript XAI tests passed** in an isolated V8 JavaScript evaluator running the exact GitHub helper and Node test case bodies with assertion equivalents.
 - Phase 6 FastAPI integration tests and React component tests are **committed, not yet executed** against the real HPO service or a browser.
 - Full \`npm run build\`, Vitest, end-to-end local Mac behavior, and the GitHub CI must execute successfully before acceptance.
 - GitHub Actions for the prior Phase 4/5 PRs failed before runner steps began. The root cause remains unconfirmed; those failures are not passing tests, and they may affect this Phase 6 PR too.
@@ -177,3 +177,7 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 - [ ] Phase 4 review PR #8 is separate; its required fixes must be reconciled before external deployment.
 
 **Scope boundary:** This phase improves explainability of the existing research ranking engine. It does not deliver clinically validated genetic diagnosis, model-specific SHAP/Integrated Gradients, calibrated posterior probabilities, live clinical trial, or a matched DeepRare benchmark.
+
+### Phase 6 audit note
+
+The final helper audit added a ninth JavaScript regression test: when evidence weighting is disabled, a confirmed-absent term with zero score impact must **not** be presented as a negative score contribution. The complete **9/9** XAI helper tests were re-exercised successfully in an isolated JavaScript evaluator. Full Node/Vitest, production build, and browser validation remain pending.
