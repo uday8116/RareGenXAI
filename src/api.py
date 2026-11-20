@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from src.api_schemas import (
     DiseaseDetail, DiseaseMatch, KnowledgeStats, ModelStatus,
     Phenotype, PhenotypeMatch, RankRequest, RankResponse,
+    ExplainRequest, ExplainResponse,
 )
 from src.api_service import ResearchService
 from src.db_access import (
@@ -26,6 +27,7 @@ from src.db_access import (
 )
 from src.ml import FEATURES
 from src.ranking import rank as baseline_rank
+from src.explainability import explain_candidate as trace_candidate
 
 
 API_PREFIX = "/api/v1"
@@ -75,6 +77,23 @@ def create_app(
                 status_code=503,
                 detail="Verified local trained model unavailable or incompatible. Run python -m src.train_ml",
             ) from exc
+
+    def canonical_observations(payload: RankRequest):
+        """Share the exact Phase 4 ontology validation for rank and explain."""
+        normalized, seen = [], set()
+        with open_readonly(service.db_path) as conn:
+            for item in payload.observations:
+                term = phenotype(conn, item.hpo_id)
+                if term is None:
+                    raise HTTPException(422, "Unknown HPO ID in observations")
+                if term["is_obsolete"]:
+                    raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
+                canonical = term["hpo_id"]
+                if canonical in seen:
+                    raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
+                seen.add(canonical)
+                normalized.append((canonical, item.status))
+        return normalized
 
     @app.get(API_PREFIX + "/health", tags=["System"])
     def health():
@@ -152,20 +171,7 @@ def create_app(
     def rank_diseases(payload: RankRequest):
         """Return ranked research candidates, never probabilities or a diagnosis."""
         context = database_or_503()
-        normalized = []
-        seen = set()
-        with open_readonly(service.db_path) as conn:
-            for item in payload.observations:
-                term = phenotype(conn, item.hpo_id)
-                if term is None:
-                    raise HTTPException(422, "Unknown HPO ID in observations")
-                if term["is_obsolete"]:
-                    raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
-                canonical = term["hpo_id"]
-                if canonical in seen:
-                    raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
-                seen.add(canonical)
-                normalized.append((canonical, item.status))
+        normalized = canonical_observations(payload)
         positive = {t for t, s in normalized if s in ("confirmed_present", "suspected_present")}
         result = []
         model_hash = None
@@ -216,6 +222,25 @@ def create_app(
             "explanation_type": explanation_type,
             "model_sha256": model_hash,
         }
+
+    @app.post(API_PREFIX + "/explain", response_model=ExplainResponse, tags=["Explainability"])
+    def explain_disease(payload: ExplainRequest):
+        """Explain ontology links for one chosen candidate, not model SHAP."""
+        context = database_or_503()
+        if payload.disease_id not in context["profiles"]:
+            raise HTTPException(404, "Disease candidate not found in the local phenotype knowledge base")
+        normalized = canonical_observations(payload)
+        manifest = None
+        if payload.method not in ("overlap", "semantic"):
+            _, manifest = model_or_503()
+        ic = service.information_content() if payload.method == "semantic" else {}
+        explanation = trace_candidate(
+            normalized, payload.disease_id, context["profiles"], context["parents"], ic,
+            method=payload.method, quality=payload.quality, labels=context["labels"],
+        )
+        if manifest is not None:
+            explanation["model_sha256"] = manifest["artifact_sha256"]
+        return explanation
 
     return app
 
