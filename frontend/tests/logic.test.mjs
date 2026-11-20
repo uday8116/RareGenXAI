@@ -57,13 +57,37 @@ test('API sends only structured HPO JSON to the same-origin local proxy', async 
     assert.equal(calls[0].options.method, 'POST');
     assert.equal(calls[0].options.credentials, 'omit');
     assert.equal(calls[0].options.cache, 'no-store');
-    assert.equal(calls[0].options.signal, controller.signal);
+    assert.ok(calls[0].options.signal);
+    assert.equal(calls[0].options.signal.aborted, false);
     const posted = JSON.parse(calls[0].options.body);
     assert.deepEqual(posted.observations, [{hpo_id:'HP:0001250',status:'confirmed_present'}]);
     assert.ok(calls[1].url.includes('seizure%20%26%20delay'));
   } finally {
     globalThis.fetch = originalFetch;
   }
+});
+
+test('API forwards caller cancellation to its internal fetch signal', async () => {
+  const originalFetch = globalThis.fetch;
+  let receivedSignal;
+  globalThis.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+    receivedSignal = options.signal;
+    options.signal.addEventListener('abort', () => {
+      const error = new Error('Aborted');
+      error.name = 'AbortError';
+      reject(error);
+    }, {once:true});
+  });
+  try {
+    const controller = new AbortController();
+    const promise = api.rank({
+      method:'overlap', observations:[{hpo_id:'HP:0001250', status:'confirmed_present'}],
+    }, controller.signal);
+    controller.abort();
+    await assert.rejects(promise, (e) => e instanceof ApiError
+      && e.message.includes('Request cancelled or timed out'));
+    assert.equal(receivedSignal.aborted, true);
+  } finally { globalThis.fetch = originalFetch; }
 });
 
 test('API reports typed validation failure rather than inventing results', async () => {
