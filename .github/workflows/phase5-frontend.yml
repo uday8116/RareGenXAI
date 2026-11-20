@@ -2,6 +2,7 @@ name: Phase 5 React Frontend
 
 on:
   push:
+    branches: [main]
     paths:
       - 'frontend/**'
       - 'docs/PHASE_05_FRONTEND.md'
@@ -18,6 +19,10 @@ on:
       - 'scripts/smoke_phase5.py'
       - '.github/workflows/phase5-frontend.yml'
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   frontend-test-build:
