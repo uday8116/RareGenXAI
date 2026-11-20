@@ -375,3 +375,38 @@ def test_phase6_cache_key_detects_same_size_atomic_file_replacement(tmp_path):
     os.replace(replacement, path)
     after = service._file_key(path)
     assert before != after, "Equal-size/matched-mtime DB replacement must invalidate cache"
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+def test_phase6_rejects_atomic_db_replacement_mid_request(client, monkeypatch, endpoint):
+    """No cached old ontology may be mixed with new HPO alias validation."""
+    import os
+    import shutil
+    import src.api as api_module
+
+    path = client.app.state.research_service.db_path
+    original_phenotype = api_module.phenotype
+    replaced = False
+
+    def replace_after_looking_up_term(conn, hpo_id):
+        nonlocal replaced
+        term = original_phenotype(conn, hpo_id)
+        if not replaced:
+            replaced = True
+            replacement = path.with_suffix(".replacement.sqlite3")
+            shutil.copy2(path, replacement)
+            os.replace(replacement, path)
+        return term
+
+    monkeypatch.setattr(api_module, "phenotype", replace_after_looking_up_term)
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+
+    response = client.post(endpoint, json=payload)
+    assert replaced
+    assert response.status_code == 503, response.text
+    assert "snapshot changed" in response.json()["detail"]
