@@ -35,12 +35,13 @@ The existing Phase 4 API on `main` is the intended service. Phase 4 review PR #8
 4. **Disease explorer:** searching a new term clears old search results and source details so a stale disease profile is not shown under the wrong selection.
 5. **Manual end-to-end smoke test:** `scripts/smoke_phase5.py` checks the Vite app shell, local /api/v1 proxy, official HPO term search and actual ranking through all available supported methods. Requires both processes to be running.
 6. **Regression tests:** added export formula-injection, negative numeric score, empty report, API cancellation, keyboard selection, and export button assertions.
+7. **Stale dashboard data:** when FastAPI disconnects, the overview now clears previously live ontology/disease counts instead of displaying them as if current. Added a dedicated disconnect/reconnect regression test.
 
 ## Executed checks and evidence
 
 The exact GitHub `frontend/src/report-export.js` source was loaded into an isolated JavaScript evaluator, and checks passed for:
 - CSV formula escaping, escaped quotes, HPO identifiers and research warning.
-- JSON model fingerprint and feature preservation.
+- JSON model fingerprint and feature preservation; genuine negative numeric scores remain numeric in CSV.
 - Empty reports and invalid format refusal.
 
 The exact GitHub `frontend/src/api.js` source was similarly exercised with a simulated HTTP transport. Checks passed for:
@@ -49,7 +50,7 @@ The exact GitHub `frontend/src/api.js` source was similarly exercised with a sim
 
 **These are targeted JavaScript tests, not a browser render, Vitest run, Vite production build or clinical evaluation.** They do not prove JSX rendering, real model integration or responsiveness.
 
-GitHub Actions run [Phase 5 frontend](https://github.com/uday8116/RareGenXAI/actions/runs/44722653522) has Ubuntu and macOS jobs marked failed within seconds with **zero executed steps**; other unchanged project workflows show the same behavior. GitHub has not provided job logs that identify a code failure. Exact Actions cause is **not confirmed**. Inspect the run's Annotations and repository/owner Actions usage and billing, then rerun. **Do not merge PR #9 on the strength of pre-execution CI failures.**
+GitHub Actions runs including the [latest reviewed frontend attempt](https://github.com/uday8116/RareGenXAI/actions/runs/44726103038) have Ubuntu and macOS jobs marked failed within seconds with **zero executed steps**; other unchanged project workflows show the same behavior. GitHub has not provided job logs that identify a code failure. Exact Actions cause is **not confirmed**. Inspect the run's Annotations and repository/owner Actions usage and billing, then rerun. **Do not merge PR #9 on the strength of pre-execution CI failures.**
 
 ## Acceptance on the physical M5 Mac
 
@@ -103,7 +104,7 @@ Launch `http://127.0.0.1:5173` in the browser. Manually verify mobile/desktop na
 
 - [x] All six planned website modules and relevant API integration implemented.
 - [x] Stale response, keyboard and export correctness fixes committed.
-- [x] Additional regression tests and explicit end-to-end smoke test authored.
+- [x] Additional 11 React UI regression tests, 5 export tests and explicit end-to-end smoke test authored.
 - [x] Targeted direct JavaScript logic checks passed.
 - [ ] Full React/Vitest tests execute and pass on Ubuntu/macOS and Apple M5.
 - [ ] Vite `npm run build` successfully produces `dist/`.

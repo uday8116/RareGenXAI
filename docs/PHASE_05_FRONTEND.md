@@ -185,3 +185,11 @@ python scripts/smoke_phase5.py
 ```
 
 This script is a transport/inference smoke test rather than full browser interaction or medical validation. The project still needs successful `npm run test`, `npm run build`, a reproducible package-lock.json, and an on-device UI review. GitHub CI currently fails before any test steps start. The exact Actions account/runner cause remains unconfirmed.
+
+### Data freshness after backend interruption
+
+When the local FastAPI server disconnects, the overview removes previously loaded live ontology/disease counts and the workbench rejects stale inference responses. Historical published RareBench metrics remain clearly labeled as historical values. This distinction is covered by a dashboard disconnect regression test.
+
+### Current acceptance blocker (20 November 2026)
+
+The latest Phase 5 GitHub workflow again failed **before any Ubuntu or macOS runner step ran**: https://github.com/uday8116/RareGenXAI/actions/runs/44726103038 . The unit test source is written, and the actual API/export JavaScript received targeted direct runtime checks, but the complete React/Vitest suite and production Vite bundle are **not verified**. Inspect GitHub workflow annotations and account Actions billing/runner status. Keep PR #9 open until runnable CI and local Mac checks pass.
