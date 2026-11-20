@@ -158,7 +158,7 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 ## What was actually verified during implementation
 
 - **7/7 Python core explanation tests passed** in a local Python 3.11+ runtime using byte-identical copies of \`src/ranking.py\`, \`src/explainability.py\`, and \`tests/test_explainability.py\`. The files' local Git blob hashes were checked against the GitHub blob SHAs. Result: 7 passed, 0.08 s.
-- **9/9 JavaScript XAI tests passed** in an isolated V8 JavaScript evaluator running the exact GitHub helper and Node test case bodies with assertion equivalents.
+- **9/9 JavaScript XAI tests passed in the actual Node 22 built-in test runner** (`node --test frontend/tests/xai.logic.test.mjs`), in a local container using byte-identical copies of the committed frontend source and test file. Verified Git blob hashes: `frontend/src/xai.js` = `7a260049ab55e37249ff734e0795709e08d52d93`, `frontend/tests/xai.logic.test.mjs` = `2fd75aeb024aed86eee07b2426fd7eaeb0812e15`. Node result: 9 passed, 0 failed (220 ms). The previous isolated V8 check also passed all 9.
 - Phase 6 FastAPI integration tests and React component tests are **committed, not yet executed** against the real HPO service or a browser.
 - Full \`npm run build\`, Vitest, end-to-end local Mac behavior, and the GitHub CI must execute successfully before acceptance.
 - GitHub Actions for the prior Phase 4/5 PRs failed before runner steps began. The root cause remains unconfirmed; those failures are not passing tests, and they may affect this Phase 6 PR too.
@@ -180,4 +180,4 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 
 ### Phase 6 audit note
 
-The final helper audit added a ninth JavaScript regression test: when evidence weighting is disabled, a confirmed-absent term with zero score impact must **not** be presented as a negative score contribution. The complete **9/9** XAI helper tests were re-exercised successfully in an isolated JavaScript evaluator. Full Node/Vitest, production build, and browser validation remain pending.
+The final helper audit added a ninth JavaScript regression test: when evidence weighting is disabled, a confirmed-absent term with zero score impact must **not** be presented as a negative score contribution. The complete **9/9** XAI helper tests were subsequently run in the native Node 22 test runner on byte-identical GitHub files. React/Vitest, production build, API integration, and browser validation remain pending.
