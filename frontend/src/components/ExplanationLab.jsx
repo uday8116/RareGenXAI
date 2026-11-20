@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight,
-  Dna, GitCompareArrows, Info, Layers3, LoaderCircle, Microscope, MinusCircle,
-  RefreshCw, ShieldAlert, Sparkles,
+  Activity, AlertTriangle, ArrowLeftRight, CheckCircle2, GitBranch,
+  Info, Layers, LoaderCircle, RefreshCw, ShieldCheck, Sparkles,
 } from 'lucide-react';
 
 import { api } from '../api.js';
@@ -172,7 +171,7 @@ function CaseComparison({ report, observations, options, availableMethods }) {
   }
 
   return <div className="xai-stack">
-    <Notice>All selected models receive the **same HPO observations and ranking settings**. Their score scales and candidate pools can differ. Agreement is not evidence of correctness or patient-level accuracy.</Notice>
+    <Notice>All selected models receive the same HPO observations and ranking settings. Their score scales and candidate pools can differ. Agreement is not evidence of correctness or patient-level accuracy.</Notice>
     <fieldset className="xai-checkbox-fieldset" disabled={busy}>
       <legend className="form-label">Select 2–{MAX_COMPARE_METHODS} locally available methods</legend>
       <div className="xai-method-pills">{METHODS.map((m) => {
@@ -185,7 +184,7 @@ function CaseComparison({ report, observations, options, availableMethods }) {
       })}</div>
     </fieldset>
     <button type="button" className="button primary" disabled={busy || selected.length < 2}
-      onClick={run}><GitCompareArrows size={17}/>{busy ? 'Comparing ' + progress + '...' : 'Compare methods on these HPO findings'}</button>
+      onClick={run}><GitBranch size={17}/>{busy ? 'Comparing ' + progress + '...' : 'Compare methods on these HPO findings'}</button>
     {busy && <Busy label="Running real local model inference. No results are simulated."/>}
     {error && <Notice danger>{error}</Notice>}
     {output && <div className="xai-stack" aria-live="polite">
@@ -245,7 +244,7 @@ function SensitivityLab({ report, observations, options }) {
   }
 
   return <div className="xai-stack">
-    <Notice>This is a **leave-one-phenotype-out sensitivity test**: rerun the same method without one chosen observation. It may change the normalization, retrieval shortlist, and model features. It is not a causal explanation or a calibrated disease-risk change.</Notice>
+    <Notice>This is a leave-one-phenotype-out sensitivity test: rerun the same method without one chosen observation. It may change the normalization, retrieval shortlist, and model features. It is not a causal explanation or a calibrated disease-risk change.</Notice>
     {choices.length === 0
       ? <Notice danger>At least two present/suspected findings, or one removable confirmed-absent finding, are needed for a valid test. The last positive finding cannot be removed.</Notice>
       : <>
@@ -266,7 +265,7 @@ function SensitivityLab({ report, observations, options }) {
     {result && <div className="xai-stack" aria-live="polite">
       <div className="xai-side-by-side">
         <div className="xai-side"><small>Original leading candidate</small><strong>{result.before?.disease_name || 'No candidates'}</strong><span>{result.before?.disease_id || '—'}</span></div>
-        <ArrowRightLeft size={19} className="xai-between" aria-hidden="true"/>
+        <ArrowLeftRight size={19} className="xai-between" aria-hidden="true"/>
         <div className="xai-side"><small>After removing {result.removedId}</small><strong>{result.after?.disease_name || 'No candidates'}</strong><span>{result.after?.disease_id || '—'}</span></div>
       </div>
       <div className="xai-summary-grid">
@@ -280,8 +279,8 @@ function SensitivityLab({ report, observations, options }) {
 }
 
 const LAB_TABS = [
-  { id: 'evidence', label: 'HPO evidence trace', icon: Layers3 },
-  { id: 'comparison', label: 'Same-case model comparison', icon: GitCompareArrows },
+  { id: 'evidence', label: 'HPO evidence trace', icon: Layers },
+  { id: 'comparison', label: 'Same-case model comparison', icon: GitBranch },
   { id: 'sensitivity', label: 'What-if sensitivity', icon: Activity },
 ];
 
@@ -293,7 +292,7 @@ export default function ExplanationLab({ report, observations, options, availabl
       <div><span className="eyebrow"><Sparkles size={13}/> PHASE 06 · AUDITABLE AI</span>
         <h2>Explainability laboratory</h2>
         <p>Explore real ontology evidence, compare local methods on the same input, and study ranking sensitivity.</p></div>
-      <span className="xai-research-tag"><ShieldAlert size={14}/> RESEARCH ONLY</span>
+      <span className="xai-research-tag"><ShieldCheck size={14}/> RESEARCH ONLY</span>
     </div>
     <div className="xai-tab-list" role="tablist" aria-label="Explainability analysis tools">
       {LAB_TABS.map(({ id, label, icon: Icon }) =>
