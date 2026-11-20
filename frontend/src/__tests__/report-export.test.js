@@ -33,6 +33,15 @@ describe('Research export safety and reproducibility', () => {
     expect(csv).not.toContain('"=HYPERLINK');
   });
 
+  it('preserves negative numeric ranking scores as numbers in CSV', () => {
+    const csv = rankingCsv({
+      ...fixture,
+      results: [{...fixture.results[0], score: -0.125}],
+    });
+    expect(csv).toContain('"-0.125"');
+    expect(csv).not.toContain('"\'-0.125"');
+  });
+
   it('preserves original model evidence and source fingerprint in JSON', () => {
     const exported = JSON.parse(rankingJson(fixture));
     expect(exported.kind).toBe('ranked_disease_candidates_not_diagnosis');

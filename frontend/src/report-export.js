@@ -5,6 +5,8 @@
 export const EXPORT_DISCLAIMER = 'Research-only candidate prioritization; scores are not calibrated disease probabilities or diagnoses.';
 
 function safeCsvValue(value) {
+  // Preserve genuine numeric ranking scores as numeric spreadsheet cells.
+  if (typeof value === 'number' && Number.isFinite(value)) return '"' + value + '"';
   const raw = String(value ?? '');
   // Neutralize Excel/Calc formula injection in disease labels and identifiers.
   const safe = /^[\s]*[=+@\-\t\r]/u.test(raw) ? "'" + raw : raw;
