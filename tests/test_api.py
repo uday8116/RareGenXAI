@@ -342,3 +342,36 @@ def test_phase6_transient_hpo_read_failure_is_service_unavailable(client, monkey
     response = client.post(endpoint, json=payload)
     assert response.status_code == 503, response.text
     assert "temporarily unreadable" in response.json()["detail"]
+
+
+def test_phase6_rank_and_explain_share_validated_knowledge_fingerprint(client):
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    rank_response = client.post("/api/v1/rank", json=payload)
+    explain_response = client.post("/api/v1/explain", json={**payload, "disease_id": "MIM:1234"})
+    assert rank_response.status_code == 200, rank_response.text
+    assert explain_response.status_code == 200, explain_response.text
+    first = rank_response.json()["knowledge_manifest_sha256"]
+    second = explain_response.json()["knowledge_manifest_sha256"]
+    assert first == second
+    assert len(first) == 64
+    assert all(c in "0123456789abcdef" for c in first)
+
+
+def test_phase6_cache_key_detects_same_size_atomic_file_replacement(tmp_path):
+    from src.api_service import ResearchService
+    import os
+
+    path = tmp_path / "snapshot.sqlite3"
+    replacement = tmp_path / "replacement.sqlite3"
+    path.write_bytes(b"first")
+    service = ResearchService(db_path=path, model_path=tmp_path / "model.joblib")
+    before = service._file_key(path)
+    previous_mtime = path.stat().st_mtime_ns
+    replacement.write_bytes(b"other")  # same byte count
+    os.utime(replacement, ns=(previous_mtime, previous_mtime))
+    os.replace(replacement, path)
+    after = service._file_key(path)
+    assert before != after, "Equal-size/matched-mtime DB replacement must invalidate cache"
