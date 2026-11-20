@@ -33,9 +33,16 @@ def test_phase6_official_knowledge_explain_and_model_consistency():
     # This is an ontology knowledge-base fixture, NOT a patient observation.
     with open_readonly(DB) as conn:
         hpo_row = conn.execute(
-            """SELECT dp.hpo_id FROM disease_phenotypes dp
+            """WITH RECURSIVE phenotype_terms(hpo_id) AS (
+                   SELECT child_id FROM hpo_parents WHERE parent_id='HP:0000118'
+                   UNION
+                   SELECT p.child_id FROM hpo_parents p
+                   JOIN phenotype_terms t ON p.parent_id=t.hpo_id
+               )
+               SELECT dp.hpo_id FROM disease_phenotypes dp
                JOIN hpo_terms ht ON ht.hpo_id = dp.hpo_id
                WHERE dp.is_negated=0 AND dp.aspect='P' AND ht.is_obsolete=0
+                 AND dp.hpo_id IN (SELECT hpo_id FROM phenotype_terms)
                GROUP BY dp.hpo_id ORDER BY COUNT(DISTINCT dp.disease_id) DESC
                LIMIT 1"""
         ).fetchone()
