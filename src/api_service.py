@@ -5,6 +5,8 @@ single API request. Cached objects contain *public* HPO disease knowledge.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import sqlite3
 from pathlib import Path
 from threading import RLock
@@ -27,9 +29,11 @@ class ResearchService:
         self._model = None
         self._manifest = None
 
-    def _file_key(self, path: Path) -> tuple[int, int]:
+    def _file_key(self, path: Path) -> tuple[int, ...]:
+        """Detect atomic DB/model replacement, including equal mtime/size."""
         state = path.stat()
-        return (state.st_mtime_ns, state.st_size)
+        return (state.st_dev, state.st_ino, state.st_ctime_ns,
+                state.st_mtime_ns, state.st_size)
 
     def context(self) -> dict:
         """Load validated schema-v2 clinical phenotype data only once per snapshot."""
@@ -46,6 +50,15 @@ class ResearchService:
                 "sources": validated["sources"],
                 "counts": validated["counts"],
                 "schema_version": validated["metadata"]["schema_version"],
+                # Fingerprint the *validated source manifest*, version and row
+                # counts; this is NOT a cryptographic hash of all SQLite bytes.
+                "knowledge_manifest_sha256": hashlib.sha256(json.dumps(
+                    {
+                        "schema_version": validated["metadata"]["schema_version"],
+                        "sources": sorted(validated["sources"], key=lambda x: x["filename"]),
+                        "counts": validated["counts"],
+                    }, sort_keys=True, separators=(",", ":"),
+                ).encode("utf-8")).hexdigest(),
                 "ic": None,
             }
             self._context = context
