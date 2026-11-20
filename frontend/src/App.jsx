@@ -18,6 +18,7 @@ const NAV = [
   { path: '/workbench', label: 'Phenotype workbench', icon: Dna },
   { path: '/explorer', label: 'Disease explorer', icon: Search },
   { path: '/models', label: 'Model laboratory', icon: BrainCircuit },
+  { path: '/experiments', label: 'Experiments', icon: FlaskConical },
   { path: '/documentation', label: 'Documentation', icon: BookOpen },
 ];
 
@@ -464,6 +465,44 @@ function ModelLab({ backend }) {
   </>;
 }
 
+function Experiments() {
+  const studies = [
+    { number: '178', label: 'Eligible published cases', tag: 'External research cohort', desc: 'Matched-case published RareBench evaluation covering eligible LIRICAL, MME and HMS records.', href: BENCHMARK_SOURCE, link: 'View external evaluation' },
+    { number: '120', label: 'Held-out synthetic diseases', tag: 'Training protocol', desc: 'Disease-disjoint synthetic HPO validation in the standard 600/120 Phase 3 training configuration. Not patient diagnostic accuracy.', href: 'https://github.com/uday8116/RareGenXAI/blob/main/docs/PHASE_03_REVIEW.md', link: 'Review training protocol' },
+    { number: 'GNN', label: 'Experimental research extension', tag: 'Not in core model bundle', desc: 'An experimental ontology graph approach exists separately; do not compare its historical results as a newly reproduced matched model.', href: 'https://github.com/uday8116/RareGenXAI/blob/main/docs/GNN_FULL_BENCHMARK_RESULTS.md', link: 'View GNN experiment' },
+  ];
+  return <>
+    <SectionIntro eyebrow="RESEARCH / 04" title="Experiments & validation" description="Trace what was actually evaluated, the evidence behind the figures, and the research work that remains." />
+    <div className="experiments-grid">{studies.map((study) => <article className="experiment-card" key={study.label}>
+      <Badge tone="teal">{study.tag}</Badge>
+      <h2>{study.number}</h2><h3>{study.label}</h3><p>{study.desc}</p>
+      <a className="source-link" href={study.href} target="_blank" rel="noreferrer">{study.link} <ExternalLink size={15}/></a>
+    </article>)}</div>
+    <div className="insight-grid">
+      <Panel title="Research evaluation protocol" subtitle="Reproducible, non-clinical candidate prioritization">
+        <div className="guardrails">
+          {[
+            ['Separate training and test context','Synthetic HPO-derived training data should not be described as real patient training data.'],
+            ['Use one eligible external cohort','Top-k and Top-5 percentages need the exact 178-case evaluation reference, eligible-case criteria and source version.'],
+            ['Disclose candidate retrieval','ML rerankers see a TF-IDF shortlist; the overlap baseline ranks the larger disease universe.'],
+            ['Avoid overclaiming explainability','ML feature values are not SHAP explanations and rankings are not calibrated disease risks.'],
+          ].map(([title,desc]) => <div className="guardrail" key={title}><Check size={17}/><div><strong>{title}</strong><p>{desc}</p></div></div>)}
+        </div>
+      </Panel>
+      <Panel title="Open research questions" subtitle="Not complete in the current browser dashboard">
+        <div className="research-gaps">
+          <div><CircleAlert size={17}/><span>Independent prospective clinical validation</span><Badge>Not established</Badge></div>
+          <div><CircleAlert size={17}/><span>Identical-case DeepRare prediction comparison</span><Badge>Not reproduced</Badge></div>
+          <div><CircleAlert size={17}/><span>Calibrated disease probabilities</span><Badge>Not available</Badge></div>
+          <div><CircleAlert size={17}/><span>Model-specific SHAP explanations</span><Badge>Future research</Badge></div>
+        </div>
+        <p className="fineprint">The website only displays documented study results. It does not perform new evaluations or compute significance tests automatically.</p>
+      </Panel>
+    </div>
+    <ResearchWarning compact/>
+  </>;
+}
+
 function Documentation() {
   const sections = [
     {no:'01', title:'Start the research backend', cmd:'bash scripts/start_api.sh', desc:'Phase 2 SQLite and Phase 3 models must be prepared and verified.'},
@@ -502,6 +541,7 @@ export default function App() {
     <Route path="/workbench" element={<Workbench backend={backend}/>}/>
     <Route path="/explorer" element={<Explorer backend={backend}/>}/>
     <Route path="/models" element={<ModelLab backend={backend}/>}/>
+    <Route path="/experiments" element={<Experiments/>}/>
     <Route path="/documentation" element={<Documentation/>}/>
     <Route path="*" element={<div className="not-found"><EmptyState icon={Compass} title="Page not found" description="Choose a workspace page from the navigation."/><NavLink className="button primary" to="/">Back to overview <ArrowLeft size={16}/></NavLink></div>}/>
   </Routes></DashboardLayout>;
