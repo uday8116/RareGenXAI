@@ -231,3 +231,78 @@ def test_openapi_and_local_cors(client):
         "Access-Control-Request-Method": "POST",
     })
     assert "access-control-allow-origin" not in blocked.headers
+
+
+def test_phase6_explain_endpoint_matches_rank_baseline(client):
+    payload = {
+        "method": "overlap",
+        "quality": True,
+        "disease_id": "ORPHA:10",
+        "observations": [
+            {"hpo_id": "HP:0001250", "status": "confirmed_present"},
+            {"hpo_id": "HP:0001263", "status": "confirmed_absent"},
+        ],
+    }
+    detail = client.post("/api/v1/explain", json=payload)
+    assert detail.status_code == 200, detail.text
+    explanation = detail.json()
+    assert explanation["disease_id"] == "ORPHA:10"
+    assert explanation["explanation_type"] == "signed_ontology_contributions"
+    assert explanation["evidence"][1]["contribution"] < 0
+    assert explanation["evidence"][1]["best_disease_hpo_id"] == "HP:0001263"
+    ranked = client.post("/api/v1/rank", json={k: v for k, v in payload.items() if k != "disease_id"})
+    assert ranked.status_code == 200
+    case = next(x for x in ranked.json()["results"] if x["disease_id"] == "ORPHA:10")
+    assert explanation["reconstructed_baseline_score"] == case["score"]
+    assert "not a diagnosis" in explanation["disclaimer"].lower()
+
+
+def test_phase6_explain_resolves_hpo_alias_and_checks_ontology(client):
+    response = client.post("/api/v1/explain", json={
+        "method": "semantic",
+        "disease_id": "MIM:1234",
+        "observations": [{"hpo_id": "HP:0099999", "status": "confirmed_present"}],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["evidence"][0]["hpo_id"] == "HP:0001250"
+    assert body["explanation_type"] == "signed_ontology_contributions"
+    assert client.get("/openapi.json").json()["paths"].get("/api/v1/explain")
+
+
+@pytest.mark.parametrize("disease_id,observations,expected", [
+    ("MIM:0000", [{"hpo_id": "HP:0001250", "status": "confirmed_present"}], 404),
+    ("MIM:1234", [{"hpo_id": "HP:9999999", "status": "confirmed_present"}], 422),
+    ("MIM:1234", [{"hpo_id": "HP:0999999", "status": "confirmed_present"}], 422),
+    ("MIM:1234", [
+        {"hpo_id": "HP:0001250", "status": "confirmed_present"},
+        {"hpo_id": "HP:0099999", "status": "suspected_present"},
+    ], 422),
+])
+def test_phase6_explain_validation_fails_closed(client, disease_id, observations, expected):
+    response = client.post("/api/v1/explain", json={
+        "method": "overlap", "disease_id": disease_id, "observations": observations,
+    })
+    assert response.status_code == expected
+
+
+def test_phase6_missing_ml_model_cannot_pretend_to_explain(client):
+    response = client.post("/api/v1/explain", json={
+        "method": "xgboost",
+        "disease_id": "MIM:1234",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    })
+    assert response.status_code == 503
+    assert "trained model" in response.json()["detail"].lower()
+
+
+def test_phase6_explain_preserves_method_weighting(client):
+    observation = [{"hpo_id": "HP:0001250", "status": "confirmed_present"},
+                   {"hpo_id": "HP:0001263", "status": "confirmed_absent"}]
+    response = client.post("/api/v1/explain", json={
+        "method": "overlap", "quality": False, "disease_id": "ORPHA:10",
+        "observations": observation,
+    })
+    assert response.status_code == 200
+    assert response.json()["reconstructed_baseline_score"] == 1.0
+    assert response.json()["evidence"][1]["contribution"] == 0
