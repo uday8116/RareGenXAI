@@ -208,6 +208,56 @@ describe('Phase 5 website', () => {
     expect(screen.queryByText('Signed baseline evidence')).not.toBeInTheDocument();
   });
 
+  it('rejects explanation evidence when the source HPO manifest changes', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      if (url === '/api/v1/rank') return mockJson({
+        ...rankFixture, knowledge_manifest_sha256:'a'.repeat(64),
+      });
+      if (url === '/api/v1/explain') return mockJson({
+        method:'overlap',disease_id:'MIM:1234',
+        knowledge_manifest_sha256:'b'.repeat(64),
+        explanation_type:'signed_ontology_contributions',
+        reconstructed_baseline_score:0.75, model_sha256:null,
+        evidence:[{hpo_id:'HP:0001250',status:'confirmed_present',match:1,contribution:0.75}],
+      });
+      return normal(url, options);
+    }));
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    expect(await screen.findByText(/returned explanation does not match the selected candidate/i)).toBeInTheDocument();
+    expect(screen.queryByText('Signed baseline evidence')).not.toBeInTheDocument();
+  });
+
+  it('blocks comparing results from two different HPO source snapshots', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    let ranks = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      if (url === '/api/v1/rank') {
+        ranks += 1;
+        const request = JSON.parse(options.body);
+        return mockJson({
+          ...rankFixture, method:request.method,
+          knowledge_manifest_sha256:(ranks < 3 ? 'a' : 'b').repeat(64),
+        });
+      }
+      return normal(url, options);
+    }));
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    await screen.findByRole('heading',{name:'Explainability laboratory'});
+    await user.click(screen.getByRole('tab',{name:/same-case model comparison/i}));
+    await user.click(screen.getByRole('button',{name:/compare methods on these HPO findings/i}));
+    expect(await screen.findByText(/HPO source snapshot changed during comparison/i)).toBeInTheDocument();
+    expect(screen.queryByText(/methods share a leading candidate/i)).not.toBeInTheDocument();
+  });
+
   it('compares two actual same-case method responses without reporting accuracy', async () => {
     const user = userEvent.setup();
     const fetchMock = apiMock();
