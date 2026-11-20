@@ -45,6 +45,19 @@ test('signed baseline evidence remains auditable and separates negative evidence
   assert.equal(groups.items[1].role, 'contradicting');
 });
 
+test('absent finding is not called a score contradiction when quality weighting is disabled', () => {
+  const groups = evidenceGroups({
+    explanation_type:'signed_ontology_contributions',
+    reconstructed_baseline_score:0.8,
+    evidence:[
+      {hpo_id:'HP:0001250',status:'confirmed_present',match:1,contribution:0.8},
+      {hpo_id:'HP:0001290',status:'confirmed_absent',match:1,contribution:0},
+    ],
+  }, obs);
+  assert.equal(groups.validScore, true);
+  assert.equal(groups.items[1].role, 'ignored');
+});
+
 test('ML evidence is context only; no fake SHAP score decomposition', () => {
   const groups = evidenceGroups({
     explanation_type:'ontology_context_not_ml_attribution',

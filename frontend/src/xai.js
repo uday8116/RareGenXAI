@@ -27,7 +27,8 @@ export function evidenceGroups(explanation, observations) {
     const absent = entry.status === 'confirmed_absent';
     let role = 'unmatched';
     if (entry.status === 'unknown') role = 'ignored';
-    else if (absent && entry.match > 0) role = 'contradicting';
+    else if (absent && entry.match > 0 && (value === null || value < 0)) role = 'contradicting';
+    else if (absent) role = 'ignored';
     else if (!absent && value != null && value > 0) role = 'supporting';
     else if (!absent && value === null && entry.match > 0) role = 'annotated';
     return { ...entry, label: names.get(entry.hpo_id) || entry.hpo_id, role };
