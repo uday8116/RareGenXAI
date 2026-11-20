@@ -118,9 +118,12 @@ function EvidenceTrace({ report, observations, options }) {
 function CaseComparison({ report, observations, options, availableMethods }) {
   const available = METHODS.filter((m) => availableMethods.includes(m));
   const [selected, setSelected] = useState(() => {
-    const pair = ['overlap', report.method].filter((m) => available.includes(m));
-    if (pair.length < 2) pair.push(available.find((m) => !pair.includes(m)) || 'semantic');
-    return [...new Set(pair)].filter((m) => available.includes(m)).slice(0, 2);
+    const pair = [...new Set(['overlap', report.method])].filter((m) => available.includes(m));
+    if (pair.length < 2) {
+      const next = available.find((m) => !pair.includes(m));
+      if (next) pair.push(next);
+    }
+    return pair.slice(0, 2);
   });
   const [responses, setResponses] = useState(null);
   const [error, setError] = useState('');
