@@ -227,6 +227,7 @@ describe('Phase 5 website', () => {
     const compared = runs.slice(1);
     expect(compared.map((r)=>r.method)).toEqual(['overlap','semantic']);
     expect(compared[0].observations).toEqual(compared[1].observations);
+    expect(compared.every((r) => r.top_k === 5 && r.candidates === 40 && r.quality === true)).toBe(true);
   });
 
   it('runs bounded sensitivity after omitting one HPO phenotype', async () => {
