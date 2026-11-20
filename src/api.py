@@ -227,6 +227,7 @@ def create_app(
             model_hash = manifest["artifact_sha256"]
         return {
             "method": payload.method,
+            "knowledge_manifest_sha256": context["knowledge_manifest_sha256"],
             "requested_count": len(normalized),
             "results": result,
             "explanation_type": explanation_type,
@@ -250,6 +251,7 @@ def create_app(
         )
         if manifest is not None:
             explanation["model_sha256"] = manifest["artifact_sha256"]
+        explanation["knowledge_manifest_sha256"] = context["knowledge_manifest_sha256"]
         return explanation
 
     return app
