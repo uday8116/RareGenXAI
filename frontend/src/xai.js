@@ -124,7 +124,7 @@ export function matchesExplanation(explanation, report, diseaseId) {
   if (explanation.explanation_type !== (baseline
     ? 'signed_ontology_contributions' : 'ontology_context_not_ml_attribution')) return false;
   if (!baseline && (!report.model_sha256 || !explanation.model_sha256)) return false;
-  if (report.model_sha256 !== (explanation.model_sha256 || null)) return false;
+  if ((report.model_sha256 || null) !== (explanation.model_sha256 || null)) return false;
   return baseline ? Number.isFinite(explanation.reconstructed_baseline_score)
     : explanation.reconstructed_baseline_score == null;
 }
