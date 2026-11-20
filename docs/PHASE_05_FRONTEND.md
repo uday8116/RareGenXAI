@@ -169,3 +169,19 @@ Future phases: advanced explainability work, true research robustness evaluation
 ## Experiments and validation page
 
 The dedicated /experiments page links to the original 178-case RareBench workflow, the documented disease-disjoint synthetic HPO training protocol, and the separate experimental GNN report. It clearly flags what is **not** established: prospective clinical validation, a matched-case DeepRare reproduction, calibrated disease probabilities, and model-specific SHAP explanations. The browser does not run these experiments; the labels and references are historical research evidence only.
+
+## Independent Phase 5 review updates
+
+See [Phase 5 final audit](PHASE_05_FINAL_AUDIT.md) for confirmed implementation fixes and outstanding tests.
+
+The workbench now cancels an unfinished /rank request whenever HPO observations, ranking methods, retrieval shortlist, score weighting or output limits change. An earlier response cannot overwrite the newer UI state. The HPO picker supports Arrow Up/Down, Enter and Escape; the disease explorer clears stale results on a new search.
+
+Two export buttons let users deliberately save the displayed ranking as **CSV or JSON on their own device**. CSV text fields are protected against spreadsheet formula injection and genuine numeric scores are preserved. JSON includes the model hash and evidence. Export files can contain phenotype IDs and should be handled as sensitive research output; the app does not write them without a click.
+
+A new optional localhost integration smoke script checks the page shell, HPO search, and API ranking through the Vite proxy. With both servers already running from separate terminals, execute from the repository root:
+
+```bash
+python scripts/smoke_phase5.py
+```
+
+This script is a transport/inference smoke test rather than full browser interaction or medical validation. The project still needs successful `npm run test`, `npm run build`, a reproducible package-lock.json, and an on-device UI review. GitHub CI currently fails before any test steps start. The exact Actions account/runner cause remains unconfirmed.

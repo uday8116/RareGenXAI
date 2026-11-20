@@ -5,13 +5,17 @@ on:
     paths:
       - 'frontend/**'
       - 'docs/PHASE_05_FRONTEND.md'
+      - 'docs/PHASE_05_FINAL_AUDIT.md'
       - 'scripts/start_frontend.sh'
+      - 'scripts/smoke_phase5.py'
       - '.github/workflows/phase5-frontend.yml'
   pull_request:
     paths:
       - 'frontend/**'
       - 'docs/PHASE_05_FRONTEND.md'
+      - 'docs/PHASE_05_FINAL_AUDIT.md'
       - 'scripts/start_frontend.sh'
+      - 'scripts/smoke_phase5.py'
       - '.github/workflows/phase5-frontend.yml'
   workflow_dispatch:
 
