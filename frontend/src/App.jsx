@@ -235,7 +235,15 @@ function PhenotypePicker({ observations, setObservations, disabled }) {
     <div className="search-field"><Search size={19} aria-hidden="true"/><input id="phenotype-search" ref={inputRef}
       autoComplete="off" value={query} disabled={disabled} placeholder="Search seizures, developmental delay, HP:0001250..."
       onChange={(e) => { setQuery(e.target.value); setOpen(true); setValidation(''); }}
-      onFocus={() => setOpen(true)} aria-expanded={open && query.length >= 2} aria-controls="phenotype-options" role="combobox" />
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') { setOpen(false); return; }
+        if (e.key === 'Enter' && open && query.trim().length >= 2) {
+          e.preventDefault();
+          if (state === 'done' && results.length > 0) add(results[0]);
+        }
+      }}
+      onFocus={() => setOpen(true)} aria-expanded={open && query.length >= 2}
+      aria-autocomplete="list" aria-controls="phenotype-options" role="combobox" />
       {query && <button type="button" aria-label="Clear phenotype search" onClick={() => { setQuery(''); setResults([]); inputRef.current?.focus(); }}><X size={16}/></button>}
     </div>
     {open && query.trim().length >= 2 && !disabled && <div className="search-popover" id="phenotype-options" role="listbox">
@@ -324,12 +332,12 @@ function Workbench({ backend }) {
               {Object.entries(METHOD_LABELS).map(([id,label]) => <option key={id} value={id} disabled={!available.includes(id)}>{label}{!available.includes(id) ? ' · requires model' : ''}</option>)}
             </select></div>
           <div className="form-row"><label htmlFor="result-limit" className="form-label">Maximum results</label>
-            <select id="result-limit" value={topK} onChange={(e) => setTopK(Number(e.target.value))}>{[3,5,10,20].map((n) => <option value={n} key={n}>Top {n}</option>)}</select></div>
+            <select id="result-limit" value={topK} onChange={(e) => { setTopK(Number(e.target.value)); setReport(null); }}>{[3,5,10,20].map((n) => <option value={n} key={n}>Top {n}</option>)}</select></div>
           <button className="advanced-toggle" type="button" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced}>
             <SlidersHorizontal size={16}/> Advanced options <ChevronDown size={15} className={showAdvanced ? 'rotate' : ''}/></button>
-          {showAdvanced && <div className="advanced-fields"><label className="toggle-row"><span>Evidence weighting (baseline methods)</span><input type="checkbox" checked={quality} onChange={(e) => setQuality(e.target.checked)}/></label>
+          {showAdvanced && <div className="advanced-fields"><label className="toggle-row"><span>Evidence weighting (baseline methods)</span><input type="checkbox" checked={quality} onChange={(e) => { setQuality(e.target.checked); setReport(null); }}/></label>
             <label htmlFor="candidate-limit" className="form-label">TF-IDF candidate shortlist ({candidates})</label>
-            <input id="candidate-limit" type="range" min="10" max="100" step="10" value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}/></div>}
+            <input id="candidate-limit" type="range" min="10" max="100" step="10" value={candidates} onChange={(e) => { setCandidates(Number(e.target.value)); setReport(null); }}/></div>}
           {!valid && observations.length > 0 && <p className="field-error">At least one phenotype must be present or suspected present.</p>}
           {!isOnline && <Alert>{backend.state === 'checking'
             ? 'Checking the local FastAPI connection...'
