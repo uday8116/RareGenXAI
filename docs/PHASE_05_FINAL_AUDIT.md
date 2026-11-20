@@ -113,3 +113,9 @@ Launch `http://127.0.0.1:5173` in the browser. Manually verify mobile/desktop na
 - [ ] Phase 5 PR #9 merged after verification.
 
 **Status: implementation substantially complete, acceptance pending external GitHub runner availability and on-device verification.**
+
+## Dependency-free test runner
+
+The independent review adds `frontend/tests/logic.test.mjs`, which uses the built-in Node 22 test runner. Run `cd frontend && npm run test:logic` even before installing React/Vitest dependencies. It checks the real API module's local paths, request JSON, abort signal, no-store behavior, error handling, historical research metrics, and secure research export serialization. This expands testing but does **not** replace a browser or Vite production build.
+
+GitHub's Phase 5 CI now schedules this dependency-free step ahead of `npm install`, so once Actions jobs can execute it provides an early, isolated correctness signal.

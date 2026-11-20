@@ -35,6 +35,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Dependency-free local API/export logic checks
+        run: npm run test:logic
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
       - name: Run frontend integration tests
