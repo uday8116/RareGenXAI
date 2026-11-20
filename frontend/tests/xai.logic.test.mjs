@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   MAX_COMPARE_METHODS, toApiObservations, rankPayload, evidenceGroups,
   compareMethods, ablationChoices, dropObservation, describeAblation,
+  matchesExplanation, assertConsistentModelVersions,
 } from '../src/xai.js';
 
 const obs = [
@@ -123,4 +124,42 @@ test('missing original leader in truncated rerank stays unknown', () => {
   const info = describeAblation(original, after, 'HP:0001250');
   assert.equal(info.originalLeaderRankAfter, null);
   assert.equal(info.rawScoreChange, null);
+});
+
+
+test('explanations must agree with the chosen method, disease and verified model', () => {
+  const report = {method:'xgboost',model_sha256:'a'.repeat(64),results:[{disease_id:'MIM:1',score:0.81}]};
+  const good = {
+    method:'xgboost',disease_id:'MIM:1',model_sha256:'a'.repeat(64),
+    explanation_type:'ontology_context_not_ml_attribution',
+    reconstructed_baseline_score:null,evidence:[{hpo_id:'HP:0001250',match:1,contribution:null}],
+  };
+  assert.equal(matchesExplanation(good, report, 'MIM:1'), true);
+  assert.equal(matchesExplanation({...good,method:'mlp'}, report, 'MIM:1'), false);
+  assert.equal(matchesExplanation({...good,disease_id:'MIM:2'}, report, 'MIM:1'), false);
+  assert.equal(matchesExplanation({...good,model_sha256:'b'.repeat(64)}, report, 'MIM:1'), false);
+  assert.equal(matchesExplanation({...good,model_sha256:null}, report, 'MIM:1'), false);
+  assert.equal(matchesExplanation({...good,explanation_type:'signed_ontology_contributions'}, report, 'MIM:1'), false);
+  assert.equal(matchesExplanation(good, report, 'MIM:2'), false);
+});
+
+test('baseline score validation fails closed for missing, NaN, or invalid contributions', () => {
+  const baseline = {method:'overlap',model_sha256:null,results:[{disease_id:'MIM:1',score:0}]};
+  const good = {method:'overlap',disease_id:'MIM:1',model_sha256:null,
+    explanation_type:'signed_ontology_contributions',reconstructed_baseline_score:0,evidence:[]};
+  assert.equal(matchesExplanation(good, baseline, 'MIM:1'), true);
+  assert.equal(matchesExplanation({...good,reconstructed_baseline_score:null},baseline,'MIM:1'),false);
+  assert.equal(evidenceGroups({...good,reconstructed_baseline_score:null,evidence:[]},obs).validScore,false);
+  assert.equal(evidenceGroups({...good,reconstructed_baseline_score:0,
+    evidence:[{hpo_id:'HP:0001250',status:'confirmed_present',match:1,contribution:null}]},obs).validScore,false);
+});
+
+test('same-case model comparison rejects a changed or missing verified artifact', () => {
+  const a={method:'xgboost',model_sha256:'a'.repeat(64),results:[]};
+  const b={method:'mlp',model_sha256:'b'.repeat(64),results:[]};
+  assert.throws(()=>assertConsistentModelVersions([a,b]),/model changed/);
+  assert.throws(()=>assertConsistentModelVersions([{method:'xgboost',model_sha256:null,results:[]}]),/fingerprint/);
+  assert.equal(assertConsistentModelVersions([a,{method:'overlap',model_sha256:null,results:[]}],a),true);
+  assert.throws(()=>assertConsistentModelVersions([b],a),/model changed/);
+  assert.throws(()=>assertConsistentModelVersions([{method:'overlap'}]),/valid ranked result/);
 });
