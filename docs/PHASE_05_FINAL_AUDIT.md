@@ -104,7 +104,7 @@ Launch `http://127.0.0.1:5173` in the browser. Manually verify mobile/desktop na
 
 - [x] All six planned website modules and relevant API integration implemented.
 - [x] Stale response, keyboard and export correctness fixes committed.
-- [x] Additional 11 React UI regression tests, 5 export tests and explicit end-to-end smoke test authored.
+- [x] Additional 11 React UI regression tests, 5 export tests, 6 dependency-free Node logic tests and explicit end-to-end smoke test authored.
 - [x] Targeted direct JavaScript logic checks passed.
 - [ ] Full React/Vitest tests execute and pass on Ubuntu/macOS and Apple M5.
 - [ ] Vite `npm run build` successfully produces `dist/`.
@@ -115,6 +115,8 @@ Launch `http://127.0.0.1:5173` in the browser. Manually verify mobile/desktop na
 **Status: implementation substantially complete, acceptance pending external GitHub runner availability and on-device verification.**
 
 ## Dependency-free test runner
+
+The independent review adds `frontend/tests/logic.test.mjs`, which uses the built-in Node 22 test runner. **All six cases from the exact committed file were exercised successfully in an isolated JavaScript evaluator using Node assertion shims and an AbortController mock, including a corrected end-to-end abort-signal assertion.** This does **not** claim the suite ran in Node, Vitest, a browser, or GitHub Actions.
 
 The independent review adds `frontend/tests/logic.test.mjs`, which uses the built-in Node 22 test runner. Run `cd frontend && npm run test:logic` even before installing React/Vitest dependencies. It checks the real API module's local paths, request JSON, abort signal, no-store behavior, error handling, historical research metrics, and secure research export serialization. This expands testing but does **not** replace a browser or Vite production build.
 
