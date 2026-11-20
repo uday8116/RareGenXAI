@@ -360,3 +360,12 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
 .research-gaps .badge{font-size:8px}
 @media(max-width:1090px){.experiments-grid{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.experiments-grid{grid-template-columns:1fr}}
+
+
+/* Phase 5 acceptance audit: accessible active HPO suggestion and local-only exports */
+.search-option.selected{background:#215058;color:#effffb;box-shadow:inset 3px 0 0 #51e5c5}
+.export-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+.export-actions button{display:inline-flex;align-items:center;gap:6px;border:1px solid #38655f;background:#1a4542;color:#b6fae8;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:800}
+.export-actions button:hover{background:#27665a;color:#fff}
+.export-actions button:focus-visible{outline:2px solid #72eed6;outline-offset:2px}
+@media(max-width:520px){.export-actions{width:100%;justify-content:flex-start}}
