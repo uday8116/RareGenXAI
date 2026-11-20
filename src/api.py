@@ -26,7 +26,7 @@ from src.db_access import (
     search_diseases, search_phenotypes,
 )
 from src.ml import FEATURES
-from src.ranking import rank as baseline_rank
+from src.ranking import rank as baseline_rank, ancestors
 from src.explainability import explain_candidate as trace_candidate
 
 
@@ -78,21 +78,31 @@ def create_app(
                 detail="Verified local trained model unavailable or incompatible. Run python -m src.train_ml",
             ) from exc
 
-    def canonical_observations(payload: RankRequest):
-        """Share the exact Phase 4 ontology validation for rank and explain."""
+    def canonical_observations(payload: RankRequest, context: dict):
+        """Validate real clinical HPO findings for BOTH rank and explain.
+
+        Excludes HPO root, inheritance categories, and nonclinical terms.
+        Transient read failures return HTTP 503 rather than a traceback.
+        """
         normalized, seen = [], set()
-        with open_readonly(service.db_path) as conn:
-            for item in payload.observations:
-                term = phenotype(conn, item.hpo_id)
-                if term is None:
-                    raise HTTPException(422, "Unknown HPO ID in observations")
-                if term["is_obsolete"]:
-                    raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
-                canonical = term["hpo_id"]
-                if canonical in seen:
-                    raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
-                seen.add(canonical)
-                normalized.append((canonical, item.status))
+        try:
+            with open_readonly(service.db_path) as conn:
+                for item in payload.observations:
+                    term = phenotype(conn, item.hpo_id)
+                    if term is None:
+                        raise HTTPException(422, "Unknown HPO ID in observations")
+                    if term["is_obsolete"]:
+                        raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
+                    canonical = term["hpo_id"]
+                    if (canonical == "HP:0000118" or
+                            "HP:0000118" not in ancestors(canonical, context["parents"])):
+                        raise HTTPException(422, "HPO ID is not a clinical phenotypic abnormality")
+                    if canonical in seen:
+                        raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
+                    seen.add(canonical)
+                    normalized.append((canonical, item.status))
+        except (OSError, sqlite3.DatabaseError) as exc:
+            raise HTTPException(503, "Local HPO knowledge changed or is temporarily unreadable") from exc
         return normalized
 
     @app.get(API_PREFIX + "/health", tags=["System"])
@@ -171,7 +181,7 @@ def create_app(
     def rank_diseases(payload: RankRequest):
         """Return ranked research candidates, never probabilities or a diagnosis."""
         context = database_or_503()
-        normalized = canonical_observations(payload)
+        normalized = canonical_observations(payload, context)
         positive = {t for t, s in normalized if s in ("confirmed_present", "suspected_present")}
         result = []
         model_hash = None
@@ -229,7 +239,7 @@ def create_app(
         context = database_or_503()
         if payload.disease_id not in context["profiles"]:
             raise HTTPException(404, "Disease candidate not found in the local phenotype knowledge base")
-        normalized = canonical_observations(payload)
+        normalized = canonical_observations(payload, context)
         manifest = None
         if payload.method not in ("overlap", "semantic"):
             _, manifest = model_or_503()
