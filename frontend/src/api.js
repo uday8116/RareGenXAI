@@ -68,5 +68,5 @@ export const api = {
   phenotype: (id) => call('/phenotypes/' + encodeURIComponent(id)),
   diseases: (query, signal) => call('/diseases/search?q=' + encodeURIComponent(query) + '&limit=25', { signal }),
   disease: (id) => call('/diseases/' + encodeURIComponent(id)),
-  rank: (payload) => call('/rank', { method: 'POST', body: payload, timeout: 60000 }),
+  rank: (payload, signal) => call('/rank', { method: 'POST', body: payload, signal, timeout: 60000 }),
 };

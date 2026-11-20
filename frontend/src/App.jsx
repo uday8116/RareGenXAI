@@ -303,6 +303,23 @@ function Workbench({ backend }) {
   const [error, setError] = useState('');
   const [report, setReport] = useState(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const pendingRequest = useRef(null);
+  useEffect(() => () => pendingRequest.current?.abort(), []);
+  function invalidateAnalysis() {
+    pendingRequest.current?.abort();
+    pendingRequest.current = null;
+    setLoading(false);
+    setReport(null);
+    setError('');
+  }
+  useEffect(() => {
+    if (backend.state !== 'online') {
+      pendingRequest.current?.abort();
+      pendingRequest.current = null;
+      setLoading(false);
+      setReport(null);
+    }
+  }, [backend.state]);
   const available = backend.models?.methods || ['overlap','semantic'];
   const isOnline = backend.state === 'online';
   const valid = observations.length > 0 && observations.some((o) => o.status === 'confirmed_present' || o.status === 'suspected_present');
@@ -311,34 +328,43 @@ function Workbench({ backend }) {
   async function run(e) {
     e.preventDefault();
     if (!canSubmit) return;
+    const controller = new AbortController();
+    pendingRequest.current?.abort();
+    pendingRequest.current = controller;
     setError(''); setReport(null); setLoading(true);
     try {
       const response = await api.rank({
         observations: observations.map(({hpo_id,status}) => ({hpo_id,status})),
         method, top_k:Number(topK), candidates:Number(candidates), quality,
-      });
-      setReport(response);
-    } catch (err) { setError(err.message); }
-    finally { setLoading(false); }
+      }, controller.signal);
+      if (pendingRequest.current === controller) setReport(response);
+    } catch (err) {
+      if (pendingRequest.current === controller) setError(err.message);
+    } finally {
+      if (pendingRequest.current === controller) {
+        pendingRequest.current = null;
+        setLoading(false);
+      }
+    }
   }
   return <>
     <SectionIntro eyebrow="ANALYSIS / 01" title="Phenotype workbench" description="Build an observation set, select a ranking method, and explore evidence-backed rare disease candidates." />
     <div className="workbench-layout">
       <section className="panel workbench-controls"><div className="panel-header"><div><h2>Research input</h2><p>Enter HPO terms only; do not use patient identifiers.</p></div><Badge tone="teal">HPO</Badge></div>
         <form className="panel-content" onSubmit={run}>
-          <PhenotypePicker observations={observations} setObservations={(fn) => {setObservations(fn);setReport(null);}} disabled={!isOnline}/>
+          <PhenotypePicker observations={observations} setObservations={(fn) => {setObservations(fn);invalidateAnalysis();}} disabled={!isOnline}/>
           <div className="form-divider"/>
           <div className="form-row"><label htmlFor="rank-method" className="form-label">Ranking method</label>
-            <select id="rank-method" value={method} onChange={(e) => { setMethod(e.target.value);setReport(null); }}>
+            <select id="rank-method" value={method} onChange={(e) => { setMethod(e.target.value);invalidateAnalysis(); }}>
               {Object.entries(METHOD_LABELS).map(([id,label]) => <option key={id} value={id} disabled={!available.includes(id)}>{label}{!available.includes(id) ? ' · requires model' : ''}</option>)}
             </select></div>
           <div className="form-row"><label htmlFor="result-limit" className="form-label">Maximum results</label>
-            <select id="result-limit" value={topK} onChange={(e) => { setTopK(Number(e.target.value)); setReport(null); }}>{[3,5,10,20].map((n) => <option value={n} key={n}>Top {n}</option>)}</select></div>
+            <select id="result-limit" value={topK} onChange={(e) => { setTopK(Number(e.target.value)); invalidateAnalysis(); }}>{[3,5,10,20].map((n) => <option value={n} key={n}>Top {n}</option>)}</select></div>
           <button className="advanced-toggle" type="button" onClick={() => setShowAdvanced(!showAdvanced)} aria-expanded={showAdvanced}>
             <SlidersHorizontal size={16}/> Advanced options <ChevronDown size={15} className={showAdvanced ? 'rotate' : ''}/></button>
-          {showAdvanced && <div className="advanced-fields"><label className="toggle-row"><span>Evidence weighting (baseline methods)</span><input type="checkbox" checked={quality} onChange={(e) => { setQuality(e.target.checked); setReport(null); }}/></label>
+          {showAdvanced && <div className="advanced-fields"><label className="toggle-row"><span>Evidence weighting (baseline methods)</span><input type="checkbox" checked={quality} onChange={(e) => { setQuality(e.target.checked); invalidateAnalysis(); }}/></label>
             <label htmlFor="candidate-limit" className="form-label">TF-IDF candidate shortlist ({candidates})</label>
-            <input id="candidate-limit" type="range" min="10" max="100" step="10" value={candidates} onChange={(e) => { setCandidates(Number(e.target.value)); setReport(null); }}/></div>}
+            <input id="candidate-limit" type="range" min="10" max="100" step="10" value={candidates} onChange={(e) => { setCandidates(Number(e.target.value)); invalidateAnalysis(); }}/></div>}
           {!valid && observations.length > 0 && <p className="field-error">At least one phenotype must be present or suspected present.</p>}
           {!isOnline && <Alert>{backend.state === 'checking'
             ? 'Checking the local FastAPI connection...'
