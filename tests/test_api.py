@@ -306,3 +306,39 @@ def test_phase6_explain_preserves_method_weighting(client):
     assert response.status_code == 200
     assert response.json()["reconstructed_baseline_score"] == 1.0
     assert response.json()["evidence"][1]["contribution"] == 0
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+@pytest.mark.parametrize("hpo_id", ["HP:0000001", "HP:0000118"])
+def test_phase6_rejects_nonclinical_ontology_categories(client, endpoint, hpo_id):
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": hpo_id, "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+    response = client.post(endpoint, json=payload)
+    assert response.status_code == 422, response.text
+    assert "not a clinical phenotypic abnormality" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+def test_phase6_transient_hpo_read_failure_is_service_unavailable(client, monkeypatch, endpoint):
+    from contextlib import contextmanager
+    import src.api as api_module
+
+    @contextmanager
+    def corrupted_read(_path):
+        raise sqlite3.DatabaseError("Simulated SQLite file replacement")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(api_module, "open_readonly", corrupted_read)
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+    response = client.post(endpoint, json=payload)
+    assert response.status_code == 503, response.text
+    assert "temporarily unreadable" in response.json()["detail"]
