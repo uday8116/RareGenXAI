@@ -86,7 +86,7 @@ describe('Phase 5 website', () => {
     expect(screen.getByText('Global developmental delay')).toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
     expect(await screen.findByText('Synthetic example syndrome')).toBeInTheDocument();
-    expect(screen.getByText('0.7500')).toBeInTheDocument();
+    expect(screen.getAllByText('0.7500').length).toBeGreaterThan(0);
     expect(screen.getByText(/not a probability/i)).toBeInTheDocument();
     expect(screen.getByText('Per-phenotype score contributions')).toBeInTheDocument();
     const rankCall = fetchMock.mock.calls.find(([url]) => url === '/api/v1/rank');

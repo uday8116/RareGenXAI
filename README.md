@@ -138,3 +138,24 @@ bash scripts/start_api.sh
 Open **http://127.0.0.1:8000/docs** for interactive Swagger/OpenAPI documentation, **http://127.0.0.1:8000/redoc** for the reference, or **http://127.0.0.1:8000/api/v1/health** for liveness. Versioned APIs include phenotype and disease search, knowledge statistics, model readiness, and explainable research ranking.
 
 The server binds to loopback only and never stores patient observations. No AWS, Railway or external database is needed. See [Phase 4 backend plan and API documentation](docs/PHASE_04_BACKEND.md). The professional website and model dashboard remain a separate frontend phase.
+
+## Phase 5: professional React research website (local-only)
+
+Phase 5 adds a responsive React + Vite website connected to the FastAPI research backend. It includes the overview dashboard, HPO phenotype-input workbench, explainable candidate rankings, disease explorer, historical model-comparison chart and API documentation. The research score is **never** a calibrated disease probability.
+
+```bash
+# Terminal 1 — from repository root, once Phase 2 data and Phase 3 models are prepared
+bash scripts/start_api.sh
+
+# Terminal 2 — from repository root
+cd frontend
+npm install
+npm run test
+npm run dev
+```
+
+Open **http://127.0.0.1:5173**. The frontend only calls the same-origin `/api/v1` endpoint through Vite's local proxy to `127.0.0.1:8000`. An unavailable backend is shown honestly: the workbench does not produce fake predictions.
+
+The model dashboard links to historical 178-case RareBench measurements (it is **not** an automatic live evaluation). No external cloud hosting, patient identifiers, localStorage or GPU is required. The UI runs locally on the Apple M5 with 16 GB RAM. See [Phase 5 implementation and Mac guide](docs/PHASE_05_FRONTEND.md).
+
+Phase 4 review PR #8 is not merged into the original Phase 5 base; check its status separately. Do not consider the new frontend fully accepted until its GitHub CI and manual local integration pass.
