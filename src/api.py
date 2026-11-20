@@ -78,6 +78,14 @@ def create_app(
                 detail="Verified local trained model unavailable or incompatible. Run python -m src.train_ml",
             ) from exc
 
+    def ensure_snapshot_stable(context: dict):
+        """Prevent mixing ontology metadata from different atomic SQLite versions."""
+        try:
+            if service._file_key(service.db_path) != context["_file_key"]:
+                raise HTTPException(503, "HPO knowledge snapshot changed during request. Rerun analysis")
+        except OSError as exc:
+            raise HTTPException(503, "HPO knowledge snapshot became unavailable") from exc
+
     def canonical_observations(payload: RankRequest, context: dict):
         """Validate real clinical HPO findings for BOTH rank and explain.
 
@@ -85,6 +93,7 @@ def create_app(
         Transient read failures return HTTP 503 rather than a traceback.
         """
         normalized, seen = [], set()
+        ensure_snapshot_stable(context)
         try:
             with open_readonly(service.db_path) as conn:
                 for item in payload.observations:
@@ -103,6 +112,7 @@ def create_app(
                     normalized.append((canonical, item.status))
         except (OSError, sqlite3.DatabaseError) as exc:
             raise HTTPException(503, "Local HPO knowledge changed or is temporarily unreadable") from exc
+        ensure_snapshot_stable(context)
         return normalized
 
     @app.get(API_PREFIX + "/health", tags=["System"])
@@ -225,6 +235,7 @@ def create_app(
                 })
             explanation_type = "matched_terms_and_feature_values"
             model_hash = manifest["artifact_sha256"]
+        ensure_snapshot_stable(context)
         return {
             "method": payload.method,
             "knowledge_manifest_sha256": context["knowledge_manifest_sha256"],
@@ -252,6 +263,7 @@ def create_app(
         if manifest is not None:
             explanation["model_sha256"] = manifest["artifact_sha256"]
         explanation["knowledge_manifest_sha256"] = context["knowledge_manifest_sha256"]
+        ensure_snapshot_stable(context)
         return explanation
 
     return app

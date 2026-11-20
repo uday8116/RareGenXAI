@@ -52,6 +52,7 @@ class ResearchService:
                 "schema_version": validated["metadata"]["schema_version"],
                 # Fingerprint the *validated source manifest*, version and row
                 # counts; this is NOT a cryptographic hash of all SQLite bytes.
+                "_file_key": key,
                 "knowledge_manifest_sha256": hashlib.sha256(json.dumps(
                     {
                         "schema_version": validated["metadata"]["schema_version"],
