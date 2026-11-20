@@ -112,3 +112,13 @@ The Phase 6 workflow has both an Ubuntu Python API job and an Ubuntu Node.js job
 The Phase 6 model comparison presents *agreement*, not ground-truth accuracy. Models may use different candidate universes and score scales. The what-if analysis measures model response to evidence removal, not causal phenotype influence. Trained ML output is descriptive ontology context, not genuine SHAP, attribution to weights, or calibrated risk. Independent clinical validation, full DeepRare matched-case comparison, medically reviewed explanations, and public deployment are outside this phase.
 
 **Status: code improvements delivered; acceptance gated by real integration, React production build and physical M5 checks.**
+
+## Audit closeout update
+
+The review also added two explicit React interaction tests in `frontend/src/__tests__/App.test.jsx`: one verifies a mismatched candidate/method explanation is hidden, and one verifies a numerically inconsistent baseline trace is hidden. Their **test code is committed**, but they have **not executed** because the React dependencies/build are unavailable in this review environment and GitHub Actions remains blocked.
+
+The full official-data integration test selects a true descendant of the clinical HPO root via a recursive parent query. It checks seven available ranking methods and per-method explain responses from the same source manifest, while the strict environment flag `RAREGEN_REQUIRE_PHASE6_INTEGRATION=1` prevents a missing source/model from being reported as success.
+
+The final native **Node 22: 13/13** and core **Python pytest: 7/7** checks were rerun and passed. These are the specific verified test sets; neither result proves the full API integration or React production build succeeded.
+
+The Phase 6 GitHub workflow now also runs `bash -n scripts/verify_phase6.sh` when an Actions runner becomes available. The latest successful code review does not bypass the mandatory Mac/browser and CI acceptance gates.
