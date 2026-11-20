@@ -487,6 +487,7 @@ function Explorer({ backend }) {
 }
 
 function ModelLab({ backend }) {
+  const navigate = useNavigate();
   const [mode, setMode] = useState('top1');
   const model = backend.models;
   const ready = model?.status === 'available';
@@ -512,6 +513,11 @@ function ModelLab({ backend }) {
     <div className="insight-grid">
       <Panel title="What the benchmark tells us" subtitle="Interpret results fairly"><p className="insight-copy">Exact HPO overlap achieved <strong>37.64% Top-1</strong> in this matched research cohort. XGBoost matched that Top-1 figure, but had lower Top-5 accuracy. More complex models did not consistently outperform the simple baseline.</p></Panel>
       <Panel title="What's not yet measured" subtitle="Scientific limitations"><p className="insight-copy">This dashboard is not a live evaluation server. It does not compute SHAP, calibrated probabilities, prospective patient accuracy or a genuine identical-case DeepRare benchmark. Those are separate research tasks.</p></Panel>
+    </div>
+    <div className="xai-model-launch">
+      <div><div className="eyebrow">PHASE 06 · LIVE CASE ANALYSIS</div><h3>Compare model rankings on the same HPO findings</h3>
+        <p>Open the phenotype workbench, run a case and use Explainability Laboratory to compare verified model outputs and test one-phenotype sensitivity.</p></div>
+      <button type="button" className="button primary" onClick={() => navigate('/workbench')}>Open case explainability <ArrowRight size={17}/></button>
     </div>
     <ResearchWarning compact/>
   </>;
@@ -569,9 +575,10 @@ function Documentation() {
       <div className="docs-steps">{sections.map((s) => <div className="docs-step" key={s.no}><div className="docs-number">{s.no}</div><div><h3>{s.title}</h3><p>{s.desc}</p><code>{s.cmd}</code></div></div>)}</div>
     </Panel>
     <div className="docs-columns"><Panel title="API reference" subtitle="Versioned /api/v1 HTTP endpoints">
-      <div className="api-reference">{[['GET','/health'],['GET','/ready'],['GET','/knowledge/stats'],['GET','/phenotypes/search'],['GET','/diseases/search'],['GET','/diseases/{id}'],['GET','/models'],['POST','/rank']].map(([method,path]) =>
+      <div className="api-reference">{[['GET','/health'],['GET','/ready'],['GET','/knowledge/stats'],['GET','/phenotypes/search'],['GET','/diseases/search'],['GET','/diseases/{id}'],['GET','/models'],['POST','/rank'],['POST','/explain']].map(([method,path]) =>
         <div className="api-reference-row" key={path}><Badge tone={method === 'POST' ? 'teal' : 'muted'}>{method}</Badge><code>/api/v1{path}</code></div>)}</div>
       <p className="fineprint">Full Swagger documentation is available from FastAPI at http://127.0.0.1:8000/docs after the backend starts.</p>
+      <p className="fineprint">Phase 6: the explain endpoint returns signed ontology contributions for overlap/semantic methods. Trained ML methods receive descriptive ontology context only, never invented SHAP attribution.</p>
     </Panel><Panel title="Scientific guardrails" subtitle="Important usage boundaries">
       <div className="guardrails">{[
         ['Local-only execution','The included launcher and dev proxy use loopback; the service is not internet-hosted.'],
