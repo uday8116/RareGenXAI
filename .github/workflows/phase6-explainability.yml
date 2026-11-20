@@ -51,6 +51,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - name: Check local acceptance script syntax
+        run: bash -n scripts/verify_phase6.sh
       - name: Install standard research dependencies
         run: python -m pip install -r requirements.txt
       - name: Verify ontology evidence and FastAPI explanation
