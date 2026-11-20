@@ -125,12 +125,19 @@ export function matchesExplanation(explanation, report, diseaseId) {
     ? 'signed_ontology_contributions' : 'ontology_context_not_ml_attribution')) return false;
   if (!baseline && (!report.model_sha256 || !explanation.model_sha256)) return false;
   if ((report.model_sha256 || null) !== (explanation.model_sha256 || null)) return false;
+  if ((report.knowledge_manifest_sha256 || null) !==
+      (explanation.knowledge_manifest_sha256 || null)) return false;
   return baseline ? Number.isFinite(explanation.reconstructed_baseline_score)
     : explanation.reconstructed_baseline_score == null;
 }
 
 /** Reject comparisons mixing incompatible verified ML bundles. */
 export function assertConsistentModelVersions(reports, initialReport = null) {
+  const snapshots = [...(reports || []), initialReport].filter(Boolean)
+    .map((r) => r.knowledge_manifest_sha256 || null);
+  if (new Set(snapshots).size > 1) {
+    throw new Error('The HPO source snapshot changed during comparison. Rerun the original analysis.');
+  }
   const hashes = [...(reports || []), initialReport].filter(Boolean).map((r) => r.model_sha256).filter(Boolean);
   if (new Set(hashes).size > 1) {
     throw new Error('The verified model changed during comparison. Run disease prioritization again.');
