@@ -38,7 +38,9 @@ export function evidenceGroups(explanation, observations) {
   const opposition = baseline ? items.reduce((x, e) => x + Math.min(0, e.contribution || 0), 0) : null;
   const net = baseline ? Math.round((support + opposition) * 1e6) / 1e6 : null;
   const largest = Math.max(1e-9, ...items.map((e) => Math.abs(e.contribution || 0)));
-  const validScore = baseline && Math.abs(net - explanation.reconstructed_baseline_score) <= 0.00001;
+  const validScore = baseline && Number.isFinite(explanation.reconstructed_baseline_score)
+    && items.every((e) => Number.isFinite(e.contribution))
+    && Math.abs(net - explanation.reconstructed_baseline_score) <= 0.00001;
   return { items, baseline, support, opposition, net, largest, validScore };
 }
 
@@ -105,4 +107,41 @@ export function describeAblation(original, after, removedId) {
     // and not the isolated causal contribution of the omitted phenotype.
     rawScoreChange: initial && oldCandidate ? oldCandidate.score - initial.score : null,
   };
+}
+
+
+/**
+ * An explanation must correspond to the chosen disease, ranking method,
+ * explanation kind and exact trusted model artifact. Never display a mismatched
+ * or stale explanation under a plausible disease title.
+ */
+export function matchesExplanation(explanation, report, diseaseId) {
+  if (!explanation || !report || !Array.isArray(report.results) ||
+      !report.results.some((row) => row.disease_id === diseaseId)) return false;
+  if (explanation.method !== report.method || explanation.disease_id !== diseaseId ||
+      !Array.isArray(explanation.evidence)) return false;
+  const baseline = report.method === 'overlap' || report.method === 'semantic';
+  if (explanation.explanation_type !== (baseline
+    ? 'signed_ontology_contributions' : 'ontology_context_not_ml_attribution')) return false;
+  if (!baseline && (!report.model_sha256 || !explanation.model_sha256)) return false;
+  if (report.model_sha256 !== (explanation.model_sha256 || null)) return false;
+  return baseline ? Number.isFinite(explanation.reconstructed_baseline_score)
+    : explanation.reconstructed_baseline_score == null;
+}
+
+/** Reject comparisons mixing incompatible verified ML bundles. */
+export function assertConsistentModelVersions(reports, initialReport = null) {
+  const hashes = [...(reports || []), initialReport].filter(Boolean).map((r) => r.model_sha256).filter(Boolean);
+  if (new Set(hashes).size > 1) {
+    throw new Error('The verified model changed during comparison. Run disease prioritization again.');
+  }
+  for (const report of reports || []) {
+    if (!report || !Array.isArray(report.results)) {
+      throw new Error('A comparison model did not return a valid ranked result.');
+    }
+    if (!['overlap', 'semantic'].includes(report.method) && !report.model_sha256) {
+      throw new Error('A trained model returned no verifiable model fingerprint.');
+    }
+  }
+  return true;
 }
