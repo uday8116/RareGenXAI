@@ -1,7 +1,7 @@
 import React from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from '../App.jsx';
 
@@ -89,6 +89,8 @@ describe('Phase 5 website', () => {
     expect(screen.getAllByText('0.7500').length).toBeGreaterThan(0);
     expect(screen.getByText(/not a probability/i)).toBeInTheDocument();
     expect(screen.getByText('Per-phenotype score contributions')).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Export ranking as CSV'})).toBeInTheDocument();
+    expect(screen.getByRole('button',{name:'Export ranking as JSON'})).toBeInTheDocument();
     const rankCall = fetchMock.mock.calls.find(([url]) => url === '/api/v1/rank');
     expect(rankCall).toBeTruthy();
     expect(rankCall[1].method).toBe('POST');
@@ -124,6 +126,42 @@ describe('Phase 5 website', () => {
     expect(screen.getByText('1 / 20')).toBeInTheDocument();
     await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
     expect(screen.getByText('2 / 20')).toBeInTheDocument();
+  });
+
+  it('allows keyboard-only selection from an HPO search dropdown', async () => {
+    const user = userEvent.setup();
+    mount('/workbench');
+    await screen.findByText('API connected');
+    const picker = screen.getByRole('combobox',{name:/add clinical phenotype/i});
+    await user.type(picker, 'seizure');
+    await screen.findByRole('option',{name:/seizure/i}, {timeout:2500});
+    await user.keyboard('{ArrowDown}{Enter}');
+    expect(screen.getByText('Seizure')).toBeInTheDocument();
+    expect(screen.getByText('1 / 20')).toBeInTheDocument();
+  });
+
+  it('ignores a delayed ranking response after observations or method change', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    let completeRanking;
+    const waitingRanking = new Promise((resolve) => { completeRanking = resolve; });
+    const pendingFetch = vi.fn(async (url, options) => {
+      if (url === '/api/v1/rank') return waitingRanking;
+      return normal(url, options);
+    });
+    vi.stubGlobal('fetch', pendingFetch);
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    await waitFor(() => expect(pendingFetch.mock.calls.some(([url]) => url === '/api/v1/rank')).toBe(true));
+    const rankCall = pendingFetch.mock.calls.find(([url]) => url === '/api/v1/rank');
+    expect(rankCall[1].signal.aborted).toBe(false);
+    await user.selectOptions(screen.getByRole('combobox',{name:'Ranking method'}), 'semantic');
+    expect(rankCall[1].signal.aborted).toBe(true);
+    await act(async () => { completeRanking(mockJson(rankFixture)); });
+    expect(screen.queryByText('Synthetic example syndrome')).not.toBeInTheDocument();
+    expect(screen.getByText(/your analysis starts here/i)).toBeInTheDocument();
   });
 
   it('loads disease annotations on demand rather than making up a disease profile', async () => {
