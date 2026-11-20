@@ -38,6 +38,10 @@ jobs:
         run: python scripts/doctor.py --require-data --require-model
       - name: Exercise official HPO and model through local FastAPI
         run: python -m pytest -q tests/test_api_integration.py
+      - name: Phase 6 strict official HPO explanation and all-model consistency
+        env:
+          RAREGEN_REQUIRE_PHASE6_INTEGRATION: '1'
+        run: python -m pytest -q tests/test_phase6_integration.py
       - name: Streamlit integration test with official HPO data
         run: python -m pytest -q tests/test_app_integration.py
       - name: Run reproducible synthetic benchmark
