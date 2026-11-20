@@ -8,7 +8,8 @@ import { api } from '../api.js';
 import { METHOD_LABELS } from '../research.js';
 import {
   MAX_COMPARE_METHODS, ablationChoices, compareMethods, describeAblation,
-  dropObservation, evidenceGroups, rankPayload,
+  dropObservation, evidenceGroups, rankPayload, matchesExplanation,
+  assertConsistentModelVersions,
 } from '../xai.js';
 
 const METHODS = Object.keys(METHOD_LABELS);
@@ -52,8 +53,7 @@ function EvidenceTrace({ report, observations, options }) {
   }, [selected, request]);
 
   const groups = useMemo(() => evidenceGroups(explanation, observations), [explanation, observations]);
-  const modelChanged = Boolean(report.model_sha256 && explanation?.model_sha256
-    && report.model_sha256 !== explanation.model_sha256);
+  const mismatchedExplanation = Boolean(explanation && !matchesExplanation(explanation, report, selected));
   const chosenRank = report.results.find((r) => r.disease_id === selected);
   const deviation = groups?.baseline && chosenRank
     ? Math.abs(groups.net - chosenRank.score) : 0;
@@ -72,8 +72,10 @@ function EvidenceTrace({ report, observations, options }) {
     </div>
     {busy && <Busy label="Tracing HPO ontology evidence..."/>}
     {error && <Notice danger>Ontology explanation unavailable: {error}. This panel never invents explanation records.</Notice>}
-    {modelChanged && <Notice danger>The verified model bundle changed after ranking. Run disease prioritization again before interpreting these results.</Notice>}
-    {groups && !modelChanged && <>
+    {mismatchedExplanation && <Notice danger>The returned explanation does not match the selected candidate, method or verified model. Rerun ranking; no untrusted evidence will be displayed.</Notice>}
+    {groups?.baseline && !mismatchedExplanation && (!groups.validScore || deviation > 0.00001)
+      && <Notice danger>The evidence contributions do not reproduce the ranked baseline score. The trace is hidden until the source snapshot is checked.</Notice>}
+    {groups && !mismatchedExplanation && (!groups.baseline || (groups.validScore && deviation <= 0.00001)) && <>
       <div className="xai-summary-grid">
         <div className="xai-mini-card"><small>Explanation kind</small><strong>{groups.baseline ? 'Signed baseline evidence' : 'Ontology context only'}</strong></div>
         <div className="xai-mini-card"><small>{groups.baseline ? 'Supporting score' : 'Ontology matches'}</small>
@@ -81,9 +83,7 @@ function EvidenceTrace({ report, observations, options }) {
         <div className="xai-mini-card"><small>{groups.baseline ? 'Contradicting score' : 'ML attribution'}</small>
           <strong>{groups.baseline ? groups.opposition.toFixed(4) : 'Not computed'}</strong></div>
       </div>
-      {groups.baseline && !groups.validScore && <Notice danger>Calculated contributions do not reproduce the returned baseline score. Do not trust the trace until the API is checked.</Notice>}
-      {deviation > 0.00001 && <Notice danger>The candidate ranking score and reconstructed evidence score differ. Rerun after verifying the model/knowledge snapshot.</Notice>}
-      <div className="xai-trace">
+       <div className="xai-trace">
         {groups.items.map((e) => {
           const pct = groups.baseline ? Math.min(100, 100 * Math.abs(e.contribution || 0) / groups.largest)
             : 100 * (e.match || 0);
@@ -157,6 +157,7 @@ function CaseComparison({ report, observations, options, availableMethods }) {
         if (ranked?.method !== method || !Array.isArray(ranked.results)) {
           throw new Error('Unexpected response while comparing model outputs.');
         }
+        assertConsistentModelVersions([...results, ranked], report);
         results.push(ranked);
       }
       if (controllerRef.current === controller) setResponses(results);
@@ -232,6 +233,7 @@ function SensitivityLab({ report, observations, options }) {
       if (ranked?.method !== report.method || !Array.isArray(ranked.results)) {
         throw new Error('The sensitivity rerun did not return a valid ranking.');
       }
+      assertConsistentModelVersions([ranked], report);
       if (controllerRef.current === controller) setResponse(ranked);
     } catch (err) {
       if (controllerRef.current === controller) setError(err.message);
