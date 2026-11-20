@@ -2,12 +2,13 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity, ArrowLeft, ArrowRight, ArrowUpRight, BookOpen, BrainCircuit,
-  Check, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Compass,
+  Check, ChevronDown, ChevronRight, CircleAlert, ClipboardList, Compass, Download,
   Database, Dna, ExternalLink, FileText, FlaskConical, GitBranch, HeartPulse,
   Info, Layers, LoaderCircle, Menu, Microscope, Network, Plus, RefreshCw,
   Search, ShieldCheck, SlidersHorizontal, Sparkles, Stethoscope, Trash2, X,
 } from 'lucide-react';
 import { api } from './api.js';
+import { downloadRanking } from './report-export.js';
 import {
   BENCHMARK, BENCHMARK_CASES, BENCHMARK_SOURCE, EVIDENCE_STATUS,
   LIMITS, METHOD_LABELS, SAMPLE_PHENOTYPES,
@@ -380,9 +381,14 @@ function Workbench({ backend }) {
         {loading && <div className="analysis-loader"><LoaderCircle className="spin" size={30}/><h3>Analyzing phenotype evidence</h3><p>Evaluating candidate disease profiles against the selected method.</p></div>}
         {!loading && report && report.results.length === 0 && <EmptyState icon={Info} title="No supported candidate match" description="The selected method found no candidate with positive supporting evidence. Try additional or more specific phenotypes." />}
         {!loading && report && report.results.length > 0 && <div className="results-list"><div className="results-meta"><Badge>{METHOD_LABELS[report.method] || report.method}</Badge>
-          <span>{report.explanation_type === 'per_phenotype_score_contributions' ? 'Weighted HPO contributions' : 'Matched HPO terms & model feature values'}</span></div>
+          <span>{report.explanation_type === 'per_phenotype_score_contributions' ? 'Weighted HPO contributions' : 'Matched HPO terms & model feature values'}</span>
+          <div className="export-actions">
+            <button type="button" onClick={() => downloadRanking(report, 'csv')} aria-label="Export ranking as CSV"><Download size={15}/> CSV</button>
+            <button type="button" onClick={() => downloadRanking(report, 'json')} aria-label="Export ranking as JSON"><Download size={15}/> JSON</button>
+          </div></div>
           {report.results.map((d, i) => <ResultCard key={d.disease_id} disease={d} index={i} type={report.explanation_type}
             onExplore={(id) => navigate('/explorer?disease=' + encodeURIComponent(id))}/>)}
+          <p className="fineprint">Exports are saved to your device only. Downloaded files include disease rankings and matched HPO IDs; treat research results as sensitive when sharing.</p>
           <ResearchWarning compact />
         </div>}
         {!loading && !report && <EmptyState icon={Microscope} title="Your analysis starts here" description="Add observed HPO phenotypes, select a method and run a local research analysis to view ranked disease candidates.">
