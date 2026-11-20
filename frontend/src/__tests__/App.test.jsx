@@ -168,6 +168,46 @@ describe('Phase 5 website', () => {
     expect(explainCall[1].credentials).toBe('omit');
   });
 
+  it('never displays evidence from a mismatched explanation candidate or method', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      if (url === '/api/v1/explain') return mockJson({
+        method:'semantic', disease_id:'MIM:9999',
+        explanation_type:'signed_ontology_contributions', model_sha256:null,
+        reconstructed_baseline_score:0.75,
+        evidence:[{hpo_id:'HP:0001250',status:'confirmed_present',match:1,contribution:0.75}],
+      });
+      return normal(url, options);
+    }));
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    expect(await screen.findByText(/returned explanation does not match the selected candidate/i)).toBeInTheDocument();
+    expect(screen.queryByText('Signed baseline evidence')).not.toBeInTheDocument();
+  });
+
+  it('hides evidence when source contributions do not reproduce the original score', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      if (url === '/api/v1/explain') return mockJson({
+        method:'overlap', disease_id:'MIM:1234',
+        explanation_type:'signed_ontology_contributions', model_sha256:null,
+        reconstructed_baseline_score:0.25,
+        evidence:[{hpo_id:'HP:0001250',status:'confirmed_present',match:1,contribution:0.25}],
+      });
+      return normal(url, options);
+    }));
+    mount('/workbench');
+    await screen.findByText('API connected');
+    await user.click(screen.getByRole('button',{name:/load example HPO terms/i}));
+    await user.click(screen.getByRole('button',{name:/run disease prioritization/i}));
+    expect(await screen.findByText(/evidence contributions do not reproduce the ranked baseline score/i)).toBeInTheDocument();
+    expect(screen.queryByText('Signed baseline evidence')).not.toBeInTheDocument();
+  });
+
   it('compares two actual same-case method responses without reporting accuracy', async () => {
     const user = userEvent.setup();
     const fetchMock = apiMock();
