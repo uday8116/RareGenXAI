@@ -121,3 +121,11 @@ The independent review adds `frontend/tests/logic.test.mjs`, which uses the buil
 The independent review adds `frontend/tests/logic.test.mjs`, which uses the built-in Node 22 test runner. Run `cd frontend && npm run test:logic` even before installing React/Vitest dependencies. It checks the real API module's local paths, request JSON, abort signal, no-store behavior, error handling, historical research metrics, and secure research export serialization. This expands testing but does **not** replace a browser or Vite production build.
 
 GitHub's Phase 5 CI now schedules this dependency-free step ahead of `npm install`, so once Actions jobs can execute it provides an early, isolated correctness signal.
+
+## Workflow usage optimization (Phase 5 review)
+
+The review also changed the **Phase 5**, **Foundation** and **full-project** GitHub Actions workflows so that `push` events run on `main` only, while a feature branch is checked via its pull-request event. This avoids running the same costly jobs twice per commit. A concurrency rule cancels superseded runs on the same PR/ref. The Foundation workflow's full Apple Silicon environment bootstrap now runs after merge on `main` or when invoked manually; its isolated Linux/macOS tests remain available for pull requests.
+
+This reduces future private-repository CI usage but **does not restore already exhausted billing limits or repair an unavailable runner**. A fresh Phase 5 run still ended with zero executed steps: https://github.com/uday8116/RareGenXAI/actions/runs/44727991358 . The owner should inspect job Annotations and account GitHub Actions billing/usage or contact GitHub support as appropriate.
+
+The reviewed code remains in PR #9. Do not merge until a real runner executes the frontend Vitest and Vite build, or the project owner supplies equivalent verified local test/build output and accepts that reduced CI assurance.
