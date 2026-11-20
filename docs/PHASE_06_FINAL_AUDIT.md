@@ -122,3 +122,17 @@ The full official-data integration test selects a true descendant of the clinica
 The final native **Node 22: 13/13** and core **Python pytest: 7/7** checks were rerun and passed. These are the specific verified test sets; neither result proves the full API integration or React production build succeeded.
 
 The Phase 6 GitHub workflow now also runs `bash -n scripts/verify_phase6.sh` when an Actions runner becomes available. The latest successful code review does not bypass the mandatory Mac/browser and CI acceptance gates.
+
+## Continuation review — additional correctness fixes (20 November 2026)
+
+The continuation audit identified three additional gaps and committed regression tests:
+
+1. **Database replacement within a request.** HPO canonicalization opens a separate SQLite read connection after the cached ontology context was loaded. An atomic replacement between those steps could have mixed old profile/ontology data with newly resolved HPO aliases. `ResearchService.context()` now keeps the identity of its validated DB file. Both `/rank` and `/explain` check that identity before and after canonicalization and again before returning results; a changed file causes HTTP 503. Two synthetic FastAPI tests deliberately replace the database during validation and verify rejection.
+2. **Same-case comparison output limit.** Phase 6 previously enlarged the comparison request's `top_k` to at least five, making it differ from the original workbench setting. Comparison now uses the same observations, HPO statuses, quality, candidates and `top_k` for all methods. React test assertions cover the consistent settings. The sensitivity tool intentionally requests up to 20 candidates when tracing the original leader's post-ablation position; this exception is explicitly different from the method-comparison test.
+3. **Strict official integration in project CI.** After the full-project workflow downloads official HPO data and builds the verified Phase 3 model, it now executes `RAREGEN_REQUIRE_PHASE6_INTEGRATION=1 python -m pytest -q tests/test_phase6_integration.py`. This cannot silently skip if data/model preparation failed, unlike early pre-data unit test collection.
+
+Two additional React regression cases check that changed HPO-source fingerprints invalidate returned explanation evidence and terminate cross-model comparisons; these tests have been committed but **not yet executed** by Vitest.
+
+**Verification distinctions remain unchanged:** original offline Python core tests **7/7 passed** and extended native Node 22 XAI tests **13/13 passed** before this continuation. Changes made during this continuation primarily affect Python API integration and React components; their full execution has **not yet been independently verified**. GitHub Actions remains blocked before worker steps start, and the physical M5 end-to-end review remains required.
+
+Latest CI actions status and PR base can be checked at https://github.com/uday8116/RareGenXAI/pull/10 . Do not merge into `main` without resolving the Phase 5 dependency and passing complete integration/build verification.
