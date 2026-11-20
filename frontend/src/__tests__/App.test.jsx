@@ -66,6 +66,24 @@ describe('Phase 5 website', () => {
     expect(screen.getByRole('link',{name:'Phenotype workbench'})).toBeInTheDocument();
   });
 
+  it('clears previously live HPO counts after the local API disconnects', async () => {
+    const user = userEvent.setup();
+    const normal = apiMock();
+    let readyCalls = 0;
+    vi.stubGlobal('fetch', vi.fn(async (url, options) => {
+      if (url === '/api/v1/ready' && ++readyCalls > 1) {
+        throw new Error('Backend disconnected');
+      }
+      return normal(url, options);
+    }));
+    mount('/');
+    expect(await screen.findByText('12,867')).toBeInTheDocument();
+    await user.click(screen.getByRole('button',{name:'Refresh backend status'}));
+    await screen.findByText(/local API unavailable/i);
+    expect(screen.queryByText('12,867')).not.toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
   it('does not invent patient ranking results when the backend is offline', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => { throw new Error('Connection refused'); }));
     mount('/workbench');
