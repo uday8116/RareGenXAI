@@ -331,7 +331,9 @@ function Workbench({ backend }) {
             <label htmlFor="candidate-limit" className="form-label">TF-IDF candidate shortlist ({candidates})</label>
             <input id="candidate-limit" type="range" min="10" max="100" step="10" value={candidates} onChange={(e) => setCandidates(Number(e.target.value))}/></div>}
           {!valid && observations.length > 0 && <p className="field-error">At least one phenotype must be present or suspected present.</p>}
-          {!isOnline && <Alert>Start FastAPI on 127.0.0.1:8000 to search HPO and run rankings.</Alert>}
+          {!isOnline && <Alert>{backend.state === 'checking'
+            ? 'Checking the local FastAPI connection...'
+            : (backend.error || 'Start FastAPI on 127.0.0.1:8000 to search HPO and run rankings.')}</Alert>}
           {!modelReady && <Alert>Selected ML method requires the verified Phase 3 model bundle.</Alert>}
           <button type="submit" className="button primary submit-button" disabled={!canSubmit}>{loading ? <Spinner label="Ranking candidates..."/> : <><Activity size={19}/> Run disease prioritization <ArrowRight size={18}/></>}</button>
           <p className="fineprint centered">Ranking only. No medical diagnosis, no patient history stored.</p>
