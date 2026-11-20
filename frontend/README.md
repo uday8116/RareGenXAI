@@ -61,3 +61,11 @@ For trained ML methods the evidence trace is explicitly **ontology context only*
 Additional dependency-free tests: `npm run test:logic` (includes xai.logic.test.mjs). React UI tests and build still require `npm install && npm run test && npm run build`.
 
 See [Phase 6 guide](../docs/PHASE_06_EXPLAINABILITY.md).
+
+### Phase 6 additional safety checks
+
+The frontend now rejects an explanation if its disease ID, ranking method, model SHA-256 or HPO knowledge manifest fingerprint is inconsistent. Baseline score mismatches hide the explanation rather than presenting unverified bars. Model comparison and what-if tests similarly reject mixing changed model/database snapshots.
+
+The complete native Node XAI suite has 13 tests. Run `npm run test:logic` for Node safeguards and `npm run test && npm run build` after installing dependencies. For strict full backend/frontend verification on a prepared M5, run `bash scripts/verify_phase6.sh --full` from the repository root.
+
+See [Phase 6 Final Audit](../docs/PHASE_06_FINAL_AUDIT.md).

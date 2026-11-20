@@ -158,7 +158,7 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 ## What was actually verified during implementation
 
 - **7/7 Python core explanation tests passed** in a local Python 3.11+ runtime using byte-identical copies of \`src/ranking.py\`, \`src/explainability.py\`, and \`tests/test_explainability.py\`. The files' local Git blob hashes were checked against the GitHub blob SHAs. Result: 7 passed, 0.08 s.
-- **9/9 JavaScript XAI tests passed in the actual Node 22 built-in test runner** (`node --test frontend/tests/xai.logic.test.mjs`), in a local container using byte-identical copies of the committed frontend source and test file. Verified Git blob hashes: `frontend/src/xai.js` = `7a260049ab55e37249ff734e0795709e08d52d93`, `frontend/tests/xai.logic.test.mjs` = `2fd75aeb024aed86eee07b2426fd7eaeb0812e15`. Node result: 9 passed, 0 failed (220 ms). The previous isolated V8 check also passed all 9.
+- **13/13 JavaScript XAI tests passed in the actual Node 22 built-in test runner** (`node --test frontend/tests/xai.logic.test.mjs`), on local byte-identical GitHub files. Verified Git blob hashes: `frontend/src/xai.js` = `70bb18b7d9c886890b6d93f0abd532cb40788da4`, `frontend/tests/xai.logic.test.mjs` = `5be0065ecab0076ab7a37a8dd30dd337c9f3b41e`. Native Node result: 13 passed, 0 failed. The same 13 tests also passed independently in isolated JavaScript evaluation.
 - Phase 6 FastAPI integration tests and React component tests are **committed, not yet executed** against the real HPO service or a browser.
 - Full \`npm run build\`, Vitest, end-to-end local Mac behavior, and the GitHub CI must execute successfully before acceptance.
 - GitHub Actions for the prior Phase 4/5 PRs failed before runner steps began. The root cause remains unconfirmed; those failures are not passing tests, and they may affect this Phase 6 PR too.
@@ -180,4 +180,27 @@ The smoke script checks the existing Phase 5 path. Manually check that \`/api/v1
 
 ### Phase 6 audit note
 
-The final helper audit added a ninth JavaScript regression test: when evidence weighting is disabled, a confirmed-absent term with zero score impact must **not** be presented as a negative score contribution. The complete **9/9** XAI helper tests were subsequently run in the native Node 22 test runner on byte-identical GitHub files. React/Vitest, production build, API integration, and browser validation remain pending.
+The follow-up review expanded the native Node XAI tests from 9 to 13. These now cover incorrectly bound explanations, missing/changed saved-model identities, inconsistent component scores and HPO manifest changes across requests. All 13 passed on byte-identical GitHub files. React/Vitest, full API integration, production build and browser validation remain pending.
+
+## Independent completeness review and source provenance
+
+See [Phase 6 Final Audit](PHASE_06_FINAL_AUDIT.md). The follow-up review added:
+
+- **Clinical-only HPO validation:** both ranking and explanation reject ontology headings and nonclinical terms outside descendants of HP:0000118.
+- **Safe data failures:** a disappearing/replaced SQLite database during HPO ID normalization returns HTTP 503; the service does not expose raw stack traces.
+- **Provenance:** `knowledge_manifest_sha256` accompanies both ranking and explanation responses. It hashes official HPO source metadata, schema version and row counts (not every database byte), allowing a frontend to detect cross-request source snapshot changes. Saved ML methods additionally require the same model SHA-256.
+- **Evidence trust rules:** the explainability panel hides data that names the wrong disease or method, refers to a different model/HPO snapshot, or cannot reconstruct the candidate baseline score.
+- **Atomic file replacement detection:** cached file identity includes device/inode/ctime as well as size/mtime.
+- **Full official integration:** `tests/test_phase6_integration.py` calls every available Phase 3 method against a real verified database and model, and checks linked explanation responses. The opt-in full mode explicitly fails if those artifacts are missing.
+- **Convenient acceptance:** `bash scripts/verify_phase6.sh --quick` runs core Python and dependency-free Node checks; `--full` additionally requires real HPO/model integration, React tests and a Vite build.
+
+**Check on M5:**
+
+~~~bash
+source .venv/bin/activate
+bash scripts/verify_phase6.sh --quick
+cd frontend && npm install && cd ..
+bash scripts/verify_phase6.sh --full
+~~~
+
+The strict full test is not yet verified in CI or on the physical Mac. The official database and model are not available in this review environment; no external medical metrics are claimed from the test source alone.

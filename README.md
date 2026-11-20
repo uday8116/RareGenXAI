@@ -190,3 +190,15 @@ npm run build
 With both local servers running, open **http://127.0.0.1:5173/workbench** and run a ranking to reveal the Phase 6 panels.
 
 Full methodology, verification evidence, limitations and M5 commands are in [Phase 6 explanation and comparison guide](docs/PHASE_06_EXPLAINABILITY.md). Phase 6 is stacked on the still-open Phase 5 implementation branch. Neither phase should be treated as merged or fully verified before GitHub CI and the physical Mac checks pass.
+
+### Phase 6 independent review and strict verification
+
+Phase 6 now rejects nonclinical HPO categories, checks both model and HPO source fingerprints across real API calls, and hides inconsistent explanations. It includes a full official-data/model acceptance test. Run:
+
+```bash
+bash scripts/verify_phase6.sh --quick
+cd frontend && npm install && cd ..
+bash scripts/verify_phase6.sh --full
+```
+
+The quick mode is **not final acceptance**. Full mode requires the verified HPO SQLite database, trained model bundle, React tests and built Vite website. See the [Phase 6 final audit](docs/PHASE_06_FINAL_AUDIT.md). GitHub Actions currently fails before running any steps, so PR #10 remains unmerged.
