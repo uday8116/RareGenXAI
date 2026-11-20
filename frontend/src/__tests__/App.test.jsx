@@ -138,6 +138,16 @@ describe('Phase 5 website', () => {
     expect(screen.getByText('PMID:123', {exact:false})).toBeInTheDocument();
   });
 
+  it('shows research experiments with referenced evidence and unresolved work', async () => {
+    mount('/experiments');
+    expect(screen.getByText('Experiments & validation')).toBeInTheDocument();
+    expect(screen.getByText('Eligible published cases')).toBeInTheDocument();
+    expect(screen.getByText('Held-out synthetic diseases')).toBeInTheDocument();
+    expect(screen.getByText('Identical-case DeepRare prediction comparison')).toBeInTheDocument();
+    expect(screen.getByRole('link',{name:/view external evaluation/i})).toHaveAttribute('href',
+      'https://github.com/uday8116/RareGenXAI/actions/runs/44484831306');
+  });
+
   it('keeps the model dashboard explicitly historical and links its evidence', async () => {
     const user = userEvent.setup();
     mount('/models');

@@ -346,3 +346,17 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{ou
   .lab-status-card h2{font-size:27px}
 }
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
+
+.experiments-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px;margin-bottom:21px}
+.experiment-card{display:flex;flex-direction:column;align-items:flex-start;background:linear-gradient(145deg,#162734,#12202f);border:1px solid #2b4b51;border-radius:15px;padding:24px;min-width:0}
+.experiment-card h2{font:700 39px "Space Grotesk",sans-serif;color:#74e8d3;letter-spacing:-1.3px;margin:21px 0 5px}
+.experiment-card h3{font-size:13px;font-weight:800;margin:0 0 9px}
+.experiment-card p{color:#96b0bd;font-size:11px;line-height:1.65;flex:1;margin:0 0 19px}
+.experiment-card .source-link{font-size:11px}
+.research-gaps{display:flex;flex-direction:column;gap:14px}
+.research-gaps>div{display:flex;align-items:center;gap:9px;color:#bdd0da;font-size:11px}
+.research-gaps svg{flex:0 0 auto;color:#e4bc7f}
+.research-gaps span{flex:1}
+.research-gaps .badge{font-size:8px}
+@media(max-width:1090px){.experiments-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:760px){.experiments-grid{grid-template-columns:1fr}}

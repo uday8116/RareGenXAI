@@ -14,7 +14,7 @@ Start React in Terminal 2:
 
 Open http://127.0.0.1:5173.
 
-Five pages: Overview, Phenotype Workbench, Disease Explorer, Model Laboratory and Documentation. The application calls the real API using relative /api/v1 paths via the Vite localhost proxy. The model-comparison metrics are historical and are linked to their original GitHub benchmark.
+Six pages: Overview, Phenotype Workbench, Disease Explorer, Model Laboratory, Experiments & Validation, and Documentation. The application calls the real API using relative /api/v1 paths via the Vite localhost proxy. The model-comparison metrics are historical and are linked to their original GitHub benchmark.
 
 Frontend tests and bundle build:
 

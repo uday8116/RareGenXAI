@@ -16,10 +16,11 @@ Deliver a professional, responsive website for RareGenXAI, connecting the Phase 
 | 5.6 | Explainable results | Evidence match, score contribution and feature-input displays |
 | 5.7 | Disease Explorer | /diseases/search and /diseases/{id} |
 | 5.8 | Model comparison dashboard | Dynamic model status plus clearly marked historical RareBench figures |
-| 5.9 | API and research documentation | Documentation route and this implementation guide |
-| 5.10 | Automated tests | Vitest and React Testing Library, frontend/src/__tests__ |
-| 5.11 | CI and packaging | Ubuntu and macOS Node 22 workflow, Vite build artifact |
-| 5.12 | Mac handover | localhost launcher, setup and manual verification instructions |
+| 5.9 | Experiments and validation | Source-linked external and synthetic evaluation plus explicit unresolved research questions |
+| 5.10 | API and research documentation | Documentation route and this implementation guide |
+| 5.11 | Automated tests | Vitest and React Testing Library, frontend/src/__tests__ |
+| 5.12 | CI and packaging | Ubuntu and macOS Node 22 workflow, Vite build artifact |
+| 5.13 | Mac handover | localhost launcher, setup and manual verification instructions |
 
 The new frontend intentionally branches from the previously verified Phase 4 main branch. Phase 4 correctness review PR #8 is open, not merged, and its review changes have not been assumed by the new UI.
 
@@ -34,6 +35,7 @@ Web browser http://127.0.0.1:5173
    - Phenotype Workbench
    - Disease Explorer
    - Model Laboratory
+   - Experiments & Validation
    - Documentation
                   |
                   | same-origin /api/v1
@@ -163,3 +165,7 @@ On Ubuntu and Apple Silicon it must install Node 22 packages, run frontend React
 - [ ] Physical Apple M5 local end-to-end launch and interaction verified
 
 Future phases: advanced explainability work, true research robustness evaluations, final integration tests, dissertation and presentation. Full trained GNN development and DeepRare replication remain separate research scope.
+
+## Experiments and validation page
+
+The dedicated /experiments page links to the original 178-case RareBench workflow, the documented disease-disjoint synthetic HPO training protocol, and the separate experimental GNN report. It clearly flags what is **not** established: prospective clinical validation, a matched-case DeepRare reproduction, calibrated disease probabilities, and model-specific SHAP explanations. The browser does not run these experiments; the labels and references are historical research evidence only.
