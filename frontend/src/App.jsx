@@ -8,6 +8,7 @@ import {
   Search, ShieldCheck, SlidersHorizontal, Sparkles, Stethoscope, Trash2, X,
 } from 'lucide-react';
 import { api } from './api.js';
+import ExplanationLab from './components/ExplanationLab.jsx';
 import { downloadRanking } from './report-export.js';
 import {
   BENCHMARK, BENCHMARK_CASES, BENCHMARK_SOURCE, EVIDENCE_STATUS,
@@ -405,6 +406,8 @@ function Workbench({ backend }) {
           </div></div>
           {report.results.map((d, i) => <ResultCard key={d.disease_id} disease={d} index={i} type={report.explanation_type}
             onExplore={(id) => navigate('/explorer?disease=' + encodeURIComponent(id))}/>)}
+          <ExplanationLab report={report} observations={observations}
+            options={{quality, top_k:topK, candidates}} availableMethods={available}/>
           <p className="fineprint">Exports are saved to your device only. Downloaded files include disease rankings and matched HPO IDs; treat research results as sensitive when sharing.</p>
           <ResearchWarning compact />
         </div>}
