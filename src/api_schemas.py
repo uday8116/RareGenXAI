@@ -111,6 +111,10 @@ class RankedDisease(BaseModel):
 class RankResponse(BaseModel):
     method: Method
     requested_count: int
+    knowledge_manifest_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$",
+        description="SHA-256 of validated HPO source manifest metadata, not database bytes",
+    )
     results: list[RankedDisease]
     explanation_type: Literal["per_phenotype_score_contributions", "matched_terms_and_feature_values"]
     model_sha256: str | None = None
@@ -141,6 +145,10 @@ class OntologyEvidence(BaseModel):
 
 class ExplainResponse(BaseModel):
     method: Method
+    knowledge_manifest_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$",
+        description="SHA-256 of validated HPO source manifest metadata, not database bytes",
+    )
     disease_id: str
     disease_name: str
     explanation_type: Literal[
