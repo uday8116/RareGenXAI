@@ -30,6 +30,7 @@ def inputs(tmp_path):
     model_file=tmp_path/'model.joblib';model_file.write_bytes(b'toy_model_byte_fixture_not_a_real_model')
     model=tmp_path/'model.manifest.json';model.write_text(json.dumps({
         'artifact_sha256':sha256(model_file),'profile_sha256':'b'*64,
+        'disease_universe':4,
         'source':{'kind':'hpo_sqlite_v2_aspect_P'},
         'training':{'train_disease_ids':['MIM:1'], 'heldout_disease_ids':['MIM:3']},
     }))
@@ -37,7 +38,7 @@ def inputs(tmp_path):
     plan_file=tmp_path/'plan.json';plan_file.write_text(json.dumps(plan))
     results=[]
     placements={('SYN-A','overlap'):1,('SYN-A','xgboost'):2,
-                ('SYN-B','overlap'):None,('SYN-B','xgboost'):1,
+                ('SYN-B','overlap'):None,('SYN-B','xgboost'):None,
                 ('SYN-C','overlap'):3,('SYN-C','xgboost'):None}
     for c in cases:
         for method in ('overlap','xgboost'):
@@ -85,7 +86,7 @@ def test_full_audit_real_metric_computation_only_from_given_fixture(inputs):
     paired=list(csv.DictReader((a['out']/'phase7_paired_effects.csv').open()))
     p=next(r for r in paired if r['cohort']=='ALL' and r['method']=='xgboost' and r['metric']=='top1')
     assert p['n']=='3'
-    assert float(p['difference']) == 0 # 1 success in each model; opposite cases
+    assert abs(float(p['difference']) + 1/3) < 1e-12  # No fabricated hit for unknown disease
     errors=list(csv.DictReader((a['out']/'phase7_error_analysis.csv').open()))
     assert any(r['error_category']=='truth_not_in_returned_ranked_list' for r in errors)
     assert any(r['error_category']=='truth_outside_model_disease_universe' for r in errors)
@@ -231,4 +232,40 @@ def test_invalid_training_heldout_manifest_overlap_is_rejected(inputs):
     model['training']['heldout_disease_ids']=['MIM:1']
     a['model_manifest'].write_text(json.dumps(model))
     with pytest.raises(ValueError,match='Frozen plan'):
+        audit(a)
+
+
+def test_unknown_disease_cannot_be_reported_as_ranked(inputs):
+    a=inputs
+    row=next(r for r in a['rows'] if r['case_id']=='SYN-B' and r['method']=='xgboost')
+    row.update(rank=1, top1=1, top5=1, reciprocal_rank=1)
+    csv_file(a['results'],a['rows'])
+    with pytest.raises(ValueError,match='Ranked a disease marked outside'):
+        audit(a)
+
+
+def test_ml_rank_cannot_exceed_frozen_retrieval_limit(inputs):
+    a=inputs
+    row=next(r for r in a['rows'] if r['case_id']=='SYN-A' and r['method']=='xgboost')
+    row.update(rank=41, top1=0, top5=0, reciprocal_rank=1/41)
+    csv_file(a['results'],a['rows'])
+    with pytest.raises(ValueError,match='exceeds frozen ML'):
+        audit(a)
+
+
+def test_baseline_rank_cannot_exceed_model_universe(inputs):
+    a=inputs
+    row=next(r for r in a['rows'] if r['case_id']=='SYN-C' and r['method']=='overlap')
+    row.update(rank=5, top1=0, top5=1, reciprocal_rank=1/5)
+    csv_file(a['results'],a['rows'])
+    with pytest.raises(ValueError,match='exceeds the verified model disease universe'):
+        audit(a)
+
+
+def test_model_universe_size_cannot_change_after_freeze(inputs):
+    a=inputs
+    manifest=json.loads(a['model_manifest'].read_text())
+    manifest['disease_universe']=400
+    a['model_manifest'].write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match='Frozen plan'):
         audit(a)
