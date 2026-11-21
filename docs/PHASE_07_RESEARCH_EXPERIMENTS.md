@@ -17,7 +17,7 @@
 | Fair matched-case comparisons | Paired differences versus overlap | Identical case IDs, fixed cohort membership |
 | Dataset/model and output provenance | Frozen JSON plan and audit JSON | SHA-256 of cases/model/outputs |
 | Reproducible full evaluation | `scripts/verify_phase7.sh`, GitHub CI | Real-run acceptance pending |
-| Automated code correctness | `tests/test_phase7_experiments.py` | **18/18 tests passed locally** |
+| Automated code correctness | `tests/test_phase7_experiments.py` | **20/20 tests passed locally** |
 
 ## Data provenance and scientific scope
 
@@ -122,7 +122,7 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 ## Checks, CI, and acceptance
 
-**Passed:** 18 synthetic-fixture test cases in `tests/test_phase7_experiments.py` executed with Python/pytest. The tested `src/phase7_experiments.py` and test file bytes were checked against their GitHub blob hashes.
+**Passed:** 20 synthetic-fixture test cases in `tests/test_phase7_experiments.py` executed with Python/pytest. The tested `src/phase7_experiments.py` and test file bytes were checked against their GitHub blob hashes.
 
 **Configured:** `.github/workflows/phase7-research.yml` runs these offline checks quickly. The updated `.github/workflows/external.yml` downloads official HPO/RareBench data, trains and verifies models, freezes the protocol **before** inference, runs the six planned methods, strictly audits complete paired results, and uploads all provenance/metrics files. The costly workflow runs on main or can be manually dispatched.
 
@@ -132,10 +132,21 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 - [x] Paired, preregistered, source-hashed experiment system implemented.
 - [x] Complete case alignment, error breakdown, metric recomputation and bootstrap implemented.
-- [x] Synthetic-fixture tests executed: 18/18 pass.
+- [x] Synthetic-fixture tests executed: 20/20 pass.
 - [x] Strict workflow and reproducible Mac command committed.
 - [ ] Official external-case training/evaluation job succeeds on new commit and publishes artifacts.
 - [ ] Generated metrics, source hashes and paired error results are independently inspected.
 - [ ] Phase 5/6 dependent PRs and full M5 acceptance checks are resolved before merge.
 
 **Status: Research evaluation infrastructure implemented and tested; new actual retrospective cohort execution and final merge remain pending.** No new accuracy numbers or matched DeepRare outcomes are invented.
+
+## Frozen plan tamper-proofing audit
+
+The final review added two additional regression tests: a frozen plan with modified cohort counts fails against the real source case list, and duplicated methods in a hand-edited plan are rejected before calculating metrics. All **20/20** synthetic fixture/audit tests passed locally using byte-identical source and tests from the GitHub branch. This result does not verify actual RareBench model accuracy or imply any DeepRare predictions.
+
+**Git fingerprints used for the local test:**
+
+- `src/phase7_experiments.py`: `0fb2cd06377a79a0c55f218ad9c49121d02f0522`
+- `tests/test_phase7_experiments.py`: `f5f04423eb0bb46c4ef7bd2933327166d0c0fe27`
+
+The pre-evaluation plan is a workflow-controlled frozen file; without an external timestamp or signature it should not be described as independently cryptographically pre-registered.
