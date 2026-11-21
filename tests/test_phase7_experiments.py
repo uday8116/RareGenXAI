@@ -184,3 +184,19 @@ def test_changed_retrieval_limit_is_rejected(inputs):
     a=inputs;a['rows'][0]['retrieval_k']=25;csv_file(a['results'],a['rows'])
     with pytest.raises(ValueError,match='Retrieval candidate limit'):
         audit(a)
+
+
+def test_candidate_universe_coverage_gets_cohort_uncertainty(inputs):
+    a=inputs;audit(a)
+    rows=list(csv.DictReader((a['out']/'phase7_cohort_metrics.csv').open()))
+    coverage=[r for r in rows if r['cohort']=='ALL' and r['method']=='overlap' and r['metric']=='disease_coverage']
+    assert len(coverage)==1
+    assert abs(float(coverage[0]['estimate'])-2/3)<1e-9
+    paired=list(csv.DictReader((a['out']/'phase7_paired_effects.csv').open()))
+    assert all(row['metric']!='disease_coverage' for row in paired)
+
+
+def test_preregister_requires_a_baseline(inputs):
+    a=inputs
+    with pytest.raises(ValueError,match='requires overlap'):
+        freeze(a['cases'],a['dataset_manifest'],a['model_manifest'],['xgboost'])
