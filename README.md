@@ -202,3 +202,26 @@ bash scripts/verify_phase6.sh --full
 ```
 
 The quick mode is **not final acceptance**. Full mode requires the verified HPO SQLite database, trained model bundle, React tests and built Vite website. See the [Phase 6 final audit](docs/PHASE_06_FINAL_AUDIT.md). GitHub Actions currently fails before running any steps, so PR #10 remains unmerged.
+
+
+## Phase 7 — Preregistered RareBench research experiments
+
+The new [Phase 7 protocol and results guide](docs/PHASE_07_RESEARCH_EXPERIMENTS.md) implements strict external-case model evaluation, independent metric rechecking, per-cohort 95% **exploratory** bootstrap intervals, paired comparison with the overlap baseline, error analysis, and source/model SHA-256 provenance.
+
+**Quick tests — no patient data needed:**
+
+```bash
+source .venv/bin/activate
+bash scripts/verify_phase7.sh --quick
+```
+
+**Full official-data experiment** (requires real, licensed/de-identified RareBench cases and verified Phase 2/3 artifacts):
+
+```bash
+python -m src.rarebench --limit-per-subset 100000
+bash scripts/verify_phase7.sh --full
+```
+
+The full command freezes the exact case set, model and methods *before* generating new ranking outputs; it fails on missing artifacts, incomplete case/method coverage or incorrect metrics. It will not overwrite an existing frozen evaluation plan. Its generated patient-case results are ignored by Git and must be inspected before reporting.
+
+**Academic restrictions:** this is retrospective published-case evaluation with possible HPO literature overlap. It is not prospective clinical validation, not a matched DeepRare comparison, and ranking scores are not calibrated diagnostic probabilities. Previously published RareBench numbers are historical snapshots, not new Phase 7 results. The Phase 7 PR remains dependent on the still-unmerged Phase 6 implementation.
