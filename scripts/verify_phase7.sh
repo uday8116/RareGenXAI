@@ -20,7 +20,7 @@ else
 fi
 
 echo "=== Phase 7: deterministic fixture and tamper-rejection tests ==="
-"$PYTHON" -m pytest -q tests/test_phase7_experiments.py
+"$PYTHON" -m pytest -q tests/test_phase7_experiments.py tests/test_phase7_historical_reaudit.py
 if [[ "$MODE" == "--quick" ]]; then
   echo "Phase 7 core tests passed; official patient cohort was NOT evaluated."
   exit 0
