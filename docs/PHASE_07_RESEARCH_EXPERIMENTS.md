@@ -17,7 +17,7 @@
 | Fair matched-case comparisons | Paired differences versus overlap | Identical case IDs, fixed cohort membership |
 | Dataset/model and output provenance | Frozen JSON plan and audit JSON | SHA-256 of cases/model/outputs |
 | Reproducible full evaluation | `scripts/verify_phase7.sh`, GitHub CI | Real-run acceptance pending |
-| Automated code correctness | `tests/test_phase7_experiments.py` | **20/20 tests passed locally** |
+| Automated code correctness | `tests/test_phase7_experiments.py` | **22/22 tests passed locally** |
 
 ## Data provenance and scientific scope
 
@@ -105,6 +105,7 @@ The workflow creates the protocol **before** running inference, but it is not in
 | `results/phase7_paired_effects.csv` | Same-case paired delta versus exact overlap with bootstrap interval |
 | `results/phase7_error_analysis.csv` | Per-cohort counts and percentages of error reasons |
 | `results/phase7_provenance.json` | Dataset/model/case/plan hashes and output file SHA-256 values |
+| `results/phase7_synthetic_training_overlap.csv` | Cohort counts where recorded disease IDs occur in synthetic model training/heldout groups or outside the known disease universe |
 
 Case and model files are excluded from Git by `.gitignore`; GitHub Actions would publish them as an inspection artifact, not commit them.
 
@@ -122,7 +123,7 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 ## Checks, CI, and acceptance
 
-**Passed:** 20 synthetic-fixture test cases in `tests/test_phase7_experiments.py` executed with Python/pytest. The tested `src/phase7_experiments.py` and test file bytes were checked against their GitHub blob hashes.
+**Passed:** 22 synthetic-fixture test cases in `tests/test_phase7_experiments.py` executed with Python/pytest. The tested `src/phase7_experiments.py` and test file bytes were checked against their GitHub blob hashes.
 
 **Configured:** `.github/workflows/phase7-research.yml` runs these offline checks quickly. The updated `.github/workflows/external.yml` downloads official HPO/RareBench data, trains and verifies models, freezes the protocol **before** inference, runs the six planned methods, strictly audits complete paired results, and uploads all provenance/metrics files. The costly workflow runs on main or can be manually dispatched.
 
@@ -132,7 +133,7 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 - [x] Paired, preregistered, source-hashed experiment system implemented.
 - [x] Complete case alignment, error breakdown, metric recomputation and bootstrap implemented.
-- [x] Synthetic-fixture tests executed: 20/20 pass.
+- [x] Synthetic-fixture tests executed: 22/22 pass.
 - [x] Strict workflow and reproducible Mac command committed.
 - [ ] Official external-case training/evaluation job succeeds on new commit and publishes artifacts.
 - [ ] Generated metrics, source hashes and paired error results are independently inspected.
@@ -142,7 +143,7 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 ## Frozen plan tamper-proofing audit
 
-The final review added two additional regression tests: a frozen plan with modified cohort counts fails against the real source case list, and duplicated methods in a hand-edited plan are rejected before calculating metrics. All **20/20** synthetic fixture/audit tests passed locally using byte-identical source and tests from the GitHub branch. This result does not verify actual RareBench model accuracy or imply any DeepRare predictions.
+The final review added two additional regression tests: a frozen plan with modified cohort counts fails against the real source case list, and duplicated methods in a hand-edited plan are rejected before calculating metrics. All **22/22** synthetic fixture/audit tests passed locally using byte-identical source and tests from the GitHub branch. This result does not verify actual RareBench model accuracy or imply any DeepRare predictions.
 
 **Git fingerprints used for the local test:**
 
@@ -150,3 +151,13 @@ The final review added two additional regression tests: a frozen plan with modif
 - `tests/test_phase7_experiments.py`: `f5f04423eb0bb46c4ef7bd2933327166d0c0fe27`
 
 The pre-evaluation plan is a workflow-controlled frozen file; without an external timestamp or signature it should not be described as independently cryptographically pre-registered.
+
+### Disease-ID overlap with synthetic training
+
+The auditor now checks the Phase 3 model manifest's `train_disease_ids` and `heldout_disease_ids` and reports the overlap of **ground-truth disease identifiers** with these groups for each RareBench cohort. The categories are: `synthetic_training_disease`, `synthetic_heldout_disease`, `other_model_disease_or_unrecorded_split`, and `outside_model_disease_universe`. It flags contradictory training/heldout sets. This is important for interpreting performance on diseases that were used to synthesize fitting examples.
+
+**This is not patient-record leakage detection:** a disease identifier in training does not mean the RareBench patient's observations were seen by the supervised model. Conversely, a heldout disease identifier does not guarantee freedom from published HPO annotation leakage. The source data and training design must still be discussed in the thesis.
+
+### Verified review update
+
+The expanded Phase 7 pure-Python test suite includes 22 cases, including synthetic training/heldout membership reporting, ambiguous plan rejection, official-source hash tampering and paired metric integrity. **22/22 passed in local pytest** using GitHub-byte-identical auditor and test files. No new patient ranking metric was measured by those tests.
