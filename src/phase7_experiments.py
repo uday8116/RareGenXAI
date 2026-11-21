@@ -270,6 +270,36 @@ def summarize(by_key, plan, *, replicates=2000):
     return details, summary, paired, errors
 
 
+def training_overlap(cases, by_key, plan, model_manifest):
+    """Describe disease-ID overlap with synthetic model fitting, NOT patient leakage."""
+    training = model_manifest.get("training", {})
+    train = set(training.get("train_disease_ids", []))
+    heldout = set(training.get("heldout_disease_ids", []))
+    if train & heldout:
+        raise ValueError("Model manifest synthetic training and held-out diseases overlap")
+    classes = {}
+    for case_id in plan["case_ids"]:
+        disease = cases[case_id]["disease_id"]
+        known = by_key[case_id, plan["methods"][0]]["known_disease"]
+        if not known:
+            tag = "outside_model_disease_universe"
+        elif disease in train:
+            tag = "synthetic_training_disease"
+        elif disease in heldout:
+            tag = "synthetic_heldout_disease"
+        else:
+            tag = "other_model_disease_or_unrecorded_split"
+        classes[case_id] = tag
+    rows = []
+    for cohort in ["ALL", *sorted(plan["cohorts"])]:
+        ids = [c for c in plan["case_ids"] if cohort == "ALL" or cases[c]["cohort"] == cohort]
+        counts = Counter(classes[c] for c in ids)
+        for label in sorted(counts):
+            rows.append({"cohort": cohort, "split_membership": label, "n": len(ids),
+                         "count": counts[label], "fraction": counts[label] / len(ids)})
+    return rows
+
+
 def verify_legacy_summary(legacy_rows, by_key, plan):
     """Ensure previous evaluation aggregate agrees with audited individual rows."""
     expected_cohorts = {"ALL", *plan["cohorts"]}
@@ -341,10 +371,12 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
     legacy = load_csv(legacy_summary_path, {"cohort", "method", "n", "top1", "top5", "mrr", "candidate_recall", "disease_coverage"})
     verify_legacy_summary(legacy, by_key, plan)
     details, summary, paired, errors = summarize(by_key, plan, replicates=replicates)
+    overlap = training_overlap(cases, by_key, plan, model)
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     names = {"phase7_case_audit.csv": details, "phase7_cohort_metrics.csv": summary,
-             "phase7_paired_effects.csv": paired, "phase7_error_analysis.csv": errors}
+             "phase7_paired_effects.csv": paired, "phase7_error_analysis.csv": errors,
+             "phase7_synthetic_training_overlap.csv": overlap}
     hashes = {}
     for name, data in names.items():
         if data:
@@ -367,6 +399,7 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
         "output_csv_sha256": hashes,
         "rank_universe_note": "ML top-40 retrieval vs ontology baseline full disease universe; candidate_recall is observed truth in returned list, not a common retrieval recall",
         "honesty": "Paired exploratory bootstrap confidence intervals; no clinical significance, prospective independence, calibrated disease probabilities or matched DeepRare run",
+        "synthetic_training_overlap_warning": "Shared disease IDs across synthetic fitting and published cases are flagged; disease-ID overlap does NOT prove patient-record leakage",
     }
     (out/"phase7_provenance.json").write_text(json.dumps(provenance, indent=2, sort_keys=True)+"\n", encoding="utf-8")
     return provenance
