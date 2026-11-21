@@ -145,6 +145,37 @@ def freeze(cases_path, dataset_manifest_path, model_manifest_path, methods, *, m
     }
 
 
+def verify_plan_for_inference(plan_path, *, cases_path, model_path, methods,
+                              retrieval_k, max_cases=0, deeprare=None):
+    """Stop inference before the first prediction if frozen inputs/config differ.
+
+    The final audit must still independently recheck the dataset manifest,
+    model evidence, generated rankings and per-case metrics.
+    """
+    if deeprare is not None:
+        raise ValueError("Phase 7 cannot include unverified DeepRare predictions")
+    plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
+    if plan.get("schema") != PLAN_SCHEMA:
+        raise ValueError("Unsupported or missing frozen Phase 7 experiment plan")
+    if (list(methods) != plan.get("methods") or retrieval_k != plan.get("ml_retrieval_k")
+            or max_cases != plan.get("selection_first_n")):
+        raise ValueError("Inference methods, shortlist limit or subset differ from frozen Phase 7 plan")
+    cases = read_cases(cases_path)
+    selected = list(cases)[:max_cases or None]
+    if (sha256(cases_path) != plan.get("case_sha256")
+            or len(cases) != plan.get("full_dataset_case_count")
+            or selected != plan.get("case_ids")):
+        raise ValueError("Published case file or case selection differs from frozen Phase 7 plan")
+    model_manifest_path = Path(model_path).with_suffix(".manifest.json")
+    manifest = read_model_manifest(model_manifest_path, model_path)
+    if (sha256(model_manifest_path) != plan.get("model_manifest_sha256")
+            or manifest["artifact_sha256"] != plan.get("model_artifact_sha256")
+            or manifest.get("profile_sha256") != plan.get("model_profile_sha256")
+            or manifest.get("disease_universe") != plan.get("model_disease_universe")):
+        raise ValueError("Saved model or profile snapshot differs from frozen Phase 7 plan")
+    return plan
+
+
 def checked_rank(row):
     raw = row["rank"].strip()
     if raw == "":
