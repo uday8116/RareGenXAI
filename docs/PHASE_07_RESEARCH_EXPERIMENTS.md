@@ -17,7 +17,8 @@
 | Fair matched-case comparisons | Paired differences versus overlap | Identical case IDs, fixed cohort membership |
 | Dataset/model and output provenance | Frozen JSON plan and audit JSON | SHA-256 of cases/model/outputs |
 | Reproducible full evaluation | `scripts/verify_phase7.sh`, GitHub CI | Real-run acceptance pending |
-| Automated code correctness | `tests/test_phase7_experiments.py` | **22/22 tests passed locally** |
+| Auditor logic tests | `tests/test_phase7_experiments.py` | Earlier 22-case version passed; expanded tests still require a fresh full run |
+| Historical ZIP regression tests | `tests/test_phase7_historical_reaudit.py` | **10/10 native pytest tests passed** on exact committed script/test bytes |
 
 ## Data provenance and scientific scope
 
@@ -77,7 +78,8 @@ python -m src.evaluate_external \
   --cases data/external/rarebench_cases.csv \
   --model models/raregen_ml.joblib \
   --methods tfidf logistic random_forest xgboost mlp overlap \
-  --retrieval-k 40 --out results/external_case_results.csv
+  --retrieval-k 40 --phase7-plan results/phase7_plan.json \
+  --out results/external_case_results.csv
 
 # Independent metrics audit, cohort CIs and paired comparison.
 python -m src.phase7_experiments audit \
@@ -88,7 +90,7 @@ python -m src.phase7_experiments audit \
   --plan results/phase7_plan.json \
   --results results/external_case_results.csv \
   --legacy-summary results/external_cohort_summary.csv \
-  --replicates 2000 --out-dir results
+  --replicates 2000 --verify-model-membership --out-dir results
 ~~~
 
 The workflow creates the protocol **before** running inference, but it is not independently timestamped or cryptographically signed by an external registrar. The evaluator records its actual `retrieval_k`, allowing the auditor to reject changed candidate limits.
@@ -105,6 +107,7 @@ The workflow creates the protocol **before** running inference, but it is not in
 | `results/phase7_paired_effects.csv` | Same-case paired delta versus exact overlap with bootstrap interval |
 | `results/phase7_error_analysis.csv` | Per-cohort counts and percentages of error reasons |
 | `results/phase7_provenance.json` | Dataset/model/case/plan hashes and output file SHA-256 values |
+| `results/phase7_research_report.md` | Dissertation-friendly **generated** report from audited cohort and paired metrics |
 | `results/phase7_synthetic_training_overlap.csv` | Cohort counts where recorded disease IDs occur in synthetic model training/heldout groups or outside the known disease universe |
 
 Case and model files are excluded from Git by `.gitignore`; GitHub Actions would publish them as an inspection artifact, not commit them.
@@ -123,7 +126,8 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 ## Checks, CI, and acceptance
 
-**Passed:** 22 synthetic-fixture test cases in `tests/test_phase7_experiments.py` executed with Python/pytest. The tested `src/phase7_experiments.py` and test file bytes were checked against their GitHub blob hashes.
+**Verified previously:** The earlier 22-test auditor version passed locally, but its code has since been expanded. The complete updated Phase 7 auditor suite still needs a fresh run on a working GitHub runner or Mac.
+**Verified on this review:** All 10 synthetic-ZIP regression tests for the historical artifact auditor passed with real pytest, using byte-identical committed source and test files.
 
 **Configured:** `.github/workflows/phase7-research.yml` runs these offline checks quickly. The updated `.github/workflows/external.yml` downloads official HPO/RareBench data, trains and verifies models, freezes the protocol **before** inference, runs the six planned methods, strictly audits complete paired results, and uploads all provenance/metrics files. The costly workflow runs on main or can be manually dispatched.
 
@@ -133,13 +137,15 @@ Five mutually exclusive case outcome categories: `top1_hit`, `rank_2_to_5`, `ran
 
 - [x] Paired, preregistered, source-hashed experiment system implemented.
 - [x] Complete case alignment, error breakdown, metric recomputation and bootstrap implemented.
-- [x] Synthetic-fixture tests executed: 22/22 pass.
+- [x] Earlier 22 auditor fixture tests passed locally (prior code snapshot).
+- [x] Historical reanalysis ZIP regression tests: 10/10 pass on exact committed code.
+- [ ] Expanded current auditor test suite executed in full on the latest commit.
 - [x] Strict workflow and reproducible Mac command committed.
 - [ ] Official external-case training/evaluation job succeeds on new commit and publishes artifacts.
 - [ ] Generated metrics, source hashes and paired error results are independently inspected.
 - [ ] Phase 5/6 dependent PRs and full M5 acceptance checks are resolved before merge.
 
-**Status: Research evaluation infrastructure implemented and tested; new actual retrospective cohort execution and final merge remain pending.** No new accuracy numbers or matched DeepRare outcomes are invented.
+**Status: Research evaluation infrastructure implemented. Historical archived predictions were independently re-checked, but a new complete official-data Phase 7 benchmark, expanded auditor suite, and merge acceptance remain pending.** No new accuracy numbers or matched DeepRare outcomes are invented.
 
 ## Frozen plan tamper-proofing audit
 
@@ -161,3 +167,30 @@ The auditor now checks the Phase 3 model manifest's `train_disease_ids` and `hel
 ### Verified review update
 
 The expanded Phase 7 pure-Python test suite includes 22 cases, including synthetic training/heldout membership reporting, ambiguous plan rejection, official-source hash tampering and paired metric integrity. **22/22 passed in local pytest** using GitHub-byte-identical auditor and test files. No new patient ranking metric was measured by those tests.
+
+## Independent historical-archive reanalysis (not new inference)
+
+The review retrieved the genuine `external-patient-benchmark` artifact from [GitHub Actions run 44467435510](https://github.com/uday8116/RareGenXAI/actions/runs/44467435510), containing **1,068 saved results** for 178 published RareBench cases across 6 methods. An independent Python audit confirmed a complete case-method matrix, consistent disease/cohort flags, truthful rank indicators, and exact agreement with the original archived cohort summary.
+
+It also recalculated exploratory case-bootstrap intervals and paired differences using the saved predictions. The archive **does not include the original HPO observation CSV or the serialized trained model weights**, so those original inputs and predictions could not be recomputed.
+
+See [Historical RareBench audit report](PHASE_07_HISTORICAL_REANALYSIS.md) for the real archive-backed estimates, confidence intervals, model/dataset fingerprints and limitations. The independently runnable implementation `src/phase7_historical_reaudit.py` uses only Python's standard library. The synthetic ZIP test suite `tests/test_phase7_historical_reaudit.py` passed **10/10 locally**.
+
+To rerun it after downloading the original GitHub Actions artifact ZIP:
+
+~~~bash
+python -m src.phase7_historical_reaudit \
+  --archive path/to/external-patient-benchmark.zip \
+  --out-dir results/phase7_historical \
+  --run-id 44467435510 --replicates 2000
+~~~
+
+This is *retrospective archived-prediction reanalysis*. It is not a fresh Phase 7 inference job, an independent hospital cohort, an actual matched DeepRare comparison, or clinical validation.
+
+## Phase 7 correctness review additions
+
+1. A recorded disease marked outside the model universe can no longer have a successful rank. An ML rank cannot exceed the frozen TF-IDF retrieval shortlist, and no baseline rank can exceed the verified disease universe size.
+2. Frozen plans must match case file, saved model, method order, retrieval cutoff, and selected subset **before inference**, not only during post-hoc auditing. The evaluator's `--phase7-plan` flag enforces this.
+3. Full runs invoke `--verify-model-membership`: the hash-verified **trusted** model bundle is loaded and ground-truth disease coverage flags are checked against its actual candidate IDs. Never enable joblib deserialization on untrusted files.
+4. The full audit generates `phase7_research_report.md` from its real metrics, without static accuracy values.
+5. The full benchmark workflow uploads the audit-generated report; these additional correctness checks and associated regression tests still require actual CI execution.
