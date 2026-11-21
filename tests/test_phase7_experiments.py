@@ -200,3 +200,17 @@ def test_preregister_requires_a_baseline(inputs):
     a=inputs
     with pytest.raises(ValueError,match='requires overlap'):
         freeze(a['cases'],a['dataset_manifest'],a['model_manifest'],['xgboost'])
+
+
+def test_frozen_cohort_composition_must_match_case_file(inputs):
+    a=inputs;plan=a['plan_data'];plan['cohorts']={'toyA':3}
+    a['plan'].write_text(json.dumps(plan))
+    with pytest.raises(ValueError,match='cohort composition'):
+        audit(a)
+
+
+def test_modified_plan_with_duplicated_methods_is_rejected(inputs):
+    a=inputs;plan=a['plan_data'];plan['methods']=['overlap','overlap']
+    a['plan'].write_text(json.dumps(plan))
+    with pytest.raises(ValueError,match='duplicated'):
+        audit(a)
