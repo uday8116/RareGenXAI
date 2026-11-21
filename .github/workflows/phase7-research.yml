@@ -6,6 +6,9 @@ on:
       - 'src/phase7_experiments.py'
       - 'src/evaluate_external.py'
       - 'tests/test_phase7_experiments.py'
+      - 'src/phase7_historical_reaudit.py'
+      - 'tests/test_phase7_historical_reaudit.py'
+      - 'docs/PHASE_07_HISTORICAL_REANALYSIS.md'
       - 'scripts/verify_phase7.sh'
       - 'docs/PHASE_07_RESEARCH_EXPERIMENTS.md'
       - '.github/workflows/phase7-research.yml'
@@ -14,6 +17,9 @@ on:
       - 'src/phase7_experiments.py'
       - 'src/evaluate_external.py'
       - 'tests/test_phase7_experiments.py'
+      - 'src/phase7_historical_reaudit.py'
+      - 'tests/test_phase7_historical_reaudit.py'
+      - 'docs/PHASE_07_HISTORICAL_REANALYSIS.md'
       - 'scripts/verify_phase7.sh'
       - 'docs/PHASE_07_RESEARCH_EXPERIMENTS.md'
       - '.github/workflows/phase7-research.yml'
@@ -35,7 +41,7 @@ jobs:
       - name: Install minimal verification dependencies
         run: python -m pip install 'pytest>=8,<10'
       - name: Test complete paired matrix, source tampering and confidence intervals
-        run: python -m pytest -q tests/test_phase7_experiments.py
+        run: python -m pytest -q tests/test_phase7_experiments.py tests/test_phase7_historical_reaudit.py
       - name: Check executable Phase 7 acceptance recipe
         run: bash -n scripts/verify_phase7.sh
       - name: Validate research experiment CLI
