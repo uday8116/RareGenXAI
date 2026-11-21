@@ -31,6 +31,7 @@ def inputs(tmp_path):
     model=tmp_path/'model.manifest.json';model.write_text(json.dumps({
         'artifact_sha256':sha256(model_file),'profile_sha256':'b'*64,
         'source':{'kind':'hpo_sqlite_v2_aspect_P'},
+        'training':{'train_disease_ids':['MIM:1'], 'heldout_disease_ids':['MIM:3']},
     }))
     plan=freeze(casefile,dataset,model,['overlap','xgboost'],model_path=model_file,seed=42)
     plan_file=tmp_path/'plan.json';plan_file.write_text(json.dumps(plan))
@@ -80,7 +81,7 @@ def test_full_audit_real_metric_computation_only_from_given_fixture(inputs):
     a=inputs;result=audit(a)
     assert result['case_count']==3
     assert result['methods']==['overlap','xgboost']
-    assert len(result['output_csv_sha256'])==4
+    assert len(result['output_csv_sha256'])==5
     paired=list(csv.DictReader((a['out']/'phase7_paired_effects.csv').open()))
     p=next(r for r in paired if r['cohort']=='ALL' and r['method']=='xgboost' and r['metric']=='top1')
     assert p['n']=='3'
@@ -213,4 +214,21 @@ def test_modified_plan_with_duplicated_methods_is_rejected(inputs):
     a=inputs;plan=a['plan_data'];plan['methods']=['overlap','overlap']
     a['plan'].write_text(json.dumps(plan))
     with pytest.raises(ValueError,match='duplicated'):
+        audit(a)
+
+
+def test_disease_overlap_with_synthetic_training_is_reported_not_confused_with_patient_leakage(inputs):
+    a=inputs;audit(a)
+    rows=list(csv.DictReader((a['out']/'phase7_synthetic_training_overlap.csv').open()))
+    group={r['split_membership']:int(r['count']) for r in rows if r['cohort']=='ALL'}
+    assert group=={'synthetic_training_disease':1,'synthetic_heldout_disease':1,
+                   'outside_model_disease_universe':1}
+
+
+def test_invalid_training_heldout_manifest_overlap_is_rejected(inputs):
+    a=inputs
+    model=json.loads(a['model_manifest'].read_text())
+    model['training']['heldout_disease_ids']=['MIM:1']
+    a['model_manifest'].write_text(json.dumps(model))
+    with pytest.raises(ValueError,match='Frozen plan'):
         audit(a)
