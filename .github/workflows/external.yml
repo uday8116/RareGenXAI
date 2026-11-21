@@ -89,6 +89,7 @@ jobs:
             results/external_paired_bootstrap.csv
             results/phase7_plan.json
             results/phase7_provenance.json
+            results/phase7_research_report.md
             results/phase7_case_audit.csv
             results/phase7_cohort_metrics.csv
             results/phase7_paired_effects.csv
