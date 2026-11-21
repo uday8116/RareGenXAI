@@ -253,7 +253,7 @@ def _rng(seed, *labels):
 
 
 def summarize(by_key, plan, *, replicates=2000):
-    """Recomputed cohort metrics + stratified paired percentile-bootstrap intervals."""
+    """Recomputed per-cohort metrics with paired case-resampled intervals."""
     if replicates < 100 or replicates > 100000:
         raise ValueError("Bootstrap replicates must be 100 to 100000")
     cohorts = ["ALL", *sorted(plan["cohorts"])]
@@ -340,6 +340,25 @@ def training_overlap(cases, by_key, plan, model_manifest):
     return rows
 
 
+def verify_known_disease_membership(by_key, cases, plan, model_ids):
+    """Independent cross-check: coverage must match trusted model disease IDs."""
+    universe = set(model_ids)
+    if not universe:
+        raise ValueError("Trusted model has no disease candidates")
+    recorded_size = plan.get("model_disease_universe")
+    if recorded_size is not None and recorded_size != len(universe):
+        raise ValueError("Frozen model disease-universe size disagrees with verified candidate IDs")
+    for case_id in plan["case_ids"]:
+        expected = int(cases[case_id]["disease_id"] in universe)
+        for method in plan["methods"]:
+            if by_key[case_id, method]["known_disease"] != expected:
+                raise ValueError(
+                    f"Reported known-disease flag disagrees with verified model profiles: "
+                    f"{case_id}, {method}"
+                )
+    return len(universe)
+
+
 def verify_legacy_summary(legacy_rows, by_key, plan):
     """Ensure previous evaluation aggregate agrees with audited individual rows."""
     expected_cohorts = {"ALL", *plan["cohorts"]}
@@ -378,7 +397,7 @@ def write_csv(path, rows):
 
 def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
               dataset_manifest_path, model_manifest_path, out_dir,
-              model_path=None, replicates=2000):
+              model_path=None, replicates=2000, verify_model_membership=False):
     plan = json.loads(Path(plan_path).read_text(encoding="utf-8"))
     if plan.get("schema") != PLAN_SCHEMA:
         raise ValueError("Missing/unsupported pre-registered Phase 7 evaluation plan")
@@ -410,6 +429,16 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
         raise ValueError("Frozen bootstrap seed is invalid")
     rows = load_csv(results_path, RESULT_COLUMNS)
     by_key = audit_rows(rows, cases, plan)
+    if verify_model_membership:
+        if model_path is None:
+            raise ValueError("Full disease coverage verification requires --model")
+        # joblib uses pickle. This path is ONLY for a trusted local artifact,
+        # whose hash and source manifest were already checked above.
+        from src.model_bundle import load_verified_bundle
+        trusted_model, trusted_manifest = load_verified_bundle(model_path)
+        if trusted_manifest["artifact_sha256"] != plan["model_artifact_sha256"]:
+            raise ValueError("Verified model hash differs from frozen Phase 7 plan")
+        verify_known_disease_membership(by_key, cases, plan, trusted_model.ids)
     legacy = load_csv(legacy_summary_path, {"cohort", "method", "n", "top1", "top5", "mrr", "candidate_recall", "disease_coverage"})
     verify_legacy_summary(legacy, by_key, plan)
     details, summary, paired, errors = summarize(by_key, plan, replicates=replicates)
@@ -440,7 +469,8 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
         "input_results_sha256": sha256(results_path),
         "legacy_summary_sha256": sha256(legacy_summary_path),
         "output_csv_sha256": hashes,
-        "rank_universe_note": "ML top-40 retrieval vs ontology baseline full disease universe; candidate_recall is observed truth in returned list, not a common retrieval recall",
+        "rank_universe_note": f"ML top-{plan['ml_retrieval_k']} retrieval vs ontology baseline full disease universe; candidate_recall is observed truth in returned list, not a common retrieval recall",
+        "model_membership_verified_from_bundle": verify_model_membership,
         "honesty": "Paired exploratory bootstrap confidence intervals; no clinical significance, prospective independence, calibrated disease probabilities or matched DeepRare run",
         "synthetic_training_overlap_warning": "Shared disease IDs across synthetic fitting and published cases are flagged; disease-ID overlap does NOT prove patient-record leakage",
     }
@@ -471,6 +501,8 @@ def main(argv=None):
     a.add_argument("--model", default=None)
     a.add_argument("--out-dir", default="results")
     a.add_argument("--replicates", type=int, default=2000)
+    a.add_argument("--verify-model-membership", action="store_true",
+                   help="Load only a trusted verified model and recheck true-disease ID coverage")
     args = p.parse_args(argv)
     if args.command == "freeze":
         plan = freeze(args.cases, args.dataset_manifest, args.model_manifest,
@@ -487,7 +519,8 @@ def main(argv=None):
                               legacy_summary_path=args.legacy_summary, plan_path=args.plan,
                               dataset_manifest_path=args.dataset_manifest,
                               model_manifest_path=args.model_manifest, model_path=args.model,
-                              out_dir=args.out_dir, replicates=args.replicates)
+                              out_dir=args.out_dir, replicates=args.replicates,
+                              verify_model_membership=args.verify_model_membership)
         print(json.dumps(provenance, indent=2))
     return 0
 
