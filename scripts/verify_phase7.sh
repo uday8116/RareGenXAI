@@ -75,7 +75,7 @@ echo "=== Audit case-method alignment, metrics, paired intervals and errors ==="
   --plan "$PLAN" \
   --results results/external_case_results.csv \
   --legacy-summary results/external_cohort_summary.csv \
-  --replicates 2000 --out-dir results
+  --replicates 2000 --verify-model-membership --out-dir results
 
 echo "Phase 7 real external cohort audit passed. This is retrospective, not clinical validation."
 echo "Inspect results/phase7_provenance.json and all cohort/error CSVs before making claims."

@@ -74,7 +74,7 @@ jobs:
             --plan results/phase7_plan.json \
             --results results/external_case_results.csv \
             --legacy-summary results/external_cohort_summary.csv \
-            --replicates 2000 --out-dir results
+            --replicates 2000 --verify-model-membership --out-dir results
       - name: Legacy exploratory bootstrap for backward comparability
         run: python -m src.paired_stats
       - name: Upload patient-level benchmark and provenance
