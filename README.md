@@ -225,3 +225,11 @@ bash scripts/verify_phase7.sh --full
 The full command freezes the exact case set, model and methods *before* generating new ranking outputs; it fails on missing artifacts, incomplete case/method coverage or incorrect metrics. It will not overwrite an existing frozen evaluation plan. Its generated patient-case results are ignored by Git and must be inspected before reporting.
 
 **Academic restrictions:** this is retrospective published-case evaluation with possible HPO literature overlap. It is not prospective clinical validation, not a matched DeepRare comparison, and ranking scores are not calibrated diagnostic probabilities. Previously published RareBench numbers are historical snapshots, not new Phase 7 results. The Phase 7 PR remains dependent on the still-unmerged Phase 6 implementation.
+
+### Phase 7 independent audit and historical evidence
+
+The Phase 7 correctness review now rejects logically impossible ranks, binds the actual inference process to the frozen case/model/method plan **before** predictions, and optionally reloads the trusted verified model to cross-check disease-ID coverage. A full successful run also produces `results/phase7_research_report.md` from audited cohort metrics.
+
+**Historical evidence was independently reanalysed:** the successful published-case benchmark archive from [GitHub Actions run 44467435510](https://github.com/uday8116/RareGenXAI/actions/runs/44467435510) contains 178 cases and 1,068 saved rankings. Every case/method row was checked against the historical reported metrics; exploratory paired confidence intervals and error breakdowns were recomputed from those archived predictions. Exact-overlap Top-1 was **37.64%** on that old snapshot. This is **not** a newly executed Phase 7 benchmark and not clinical validation, and the archive does not contain the original HPO observations or the trained model bytes.
+
+See [archived RareBench reanalysis](docs/PHASE_07_HISTORICAL_REANALYSIS.md) and the reusable `src/phase7_historical_reaudit.py` CLI. Its synthetic archive regression suite passed **10/10 tests** locally using byte-identical committed code. The expanded current live-evaluation audit tests and a new full official HPO+RareBench run still require CI or the owner's Mac. Phase 7 PR #11 therefore remains open.
