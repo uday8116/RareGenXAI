@@ -20,6 +20,7 @@ METHODS = frozenset({
     "random_forest", "xgboost", "mlp", "DeepRare_external",
 })
 METRICS = ("top1", "top5", "mrr", "candidate_recall", "disease_coverage")
+ML_METHODS = frozenset({"tfidf", "logistic", "random_forest", "xgboost", "mlp"})
 RESULT_COLUMNS = frozenset({
     "case_id", "cohort", "method", "true_disease_id", "known_disease",
     "rank", "top1", "top5", "reciprocal_rank", "retrieval_k",
@@ -133,6 +134,7 @@ def freeze(cases_path, dataset_manifest_path, model_manifest_path, methods, *, m
         "dataset_manifest_sha256": sha256(dataset_manifest_path),
         "model_artifact_sha256": model["artifact_sha256"],
         "model_profile_sha256": model.get("profile_sha256"),
+        "model_disease_universe": model.get("disease_universe"),
         "model_manifest_sha256": sha256(model_manifest_path),
         "methods": methods,
         "ml_retrieval_k": retrieval_k,
@@ -175,6 +177,13 @@ def audit_rows(rows, cases, plan):
         rank = checked_rank(r)
         top1, top5 = _flag(r["top1"], "top1"), _flag(r["top5"], "top5")
         known = _flag(r["known_disease"], "known_disease")
+        if rank is not None and known == 0:
+            raise ValueError(f"Ranked a disease marked outside the model universe for {key}")
+        if rank is not None and key[1] in ML_METHODS and rank > plan["ml_retrieval_k"]:
+            raise ValueError(f"Rank exceeds frozen ML candidate shortlist for {key}")
+        universe = plan.get("model_disease_universe")
+        if rank is not None and isinstance(universe, int) and universe > 0 and rank > universe:
+            raise ValueError(f"Rank exceeds the verified model disease universe for {key}")
         value = float(r["reciprocal_rank"])
         if not math.isfinite(value) or not 0 <= value <= 1:
             raise ValueError(f"Invalid reciprocal rank: {key}")
@@ -349,6 +358,8 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
             or plan.get("dataset_manifest_sha256") != sha256(dataset_manifest_path)
             or plan.get("model_manifest_sha256") != sha256(model_manifest_path)
             or plan.get("model_artifact_sha256") != model["artifact_sha256"]
+            or plan.get("model_profile_sha256") != model.get("profile_sha256")
+            or plan.get("model_disease_universe") != model.get("disease_universe")
             or plan.get("dataset_archive_sha256") != dataset["archive_sha256"]):
         raise ValueError("Frozen plan no longer matches downloaded cases, dataset or model")
     ids = list(cases)[:plan["selection_first_n"] or None]
@@ -393,6 +404,7 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
         "dataset_archive_sha256": dataset["archive_sha256"],
         "model_artifact_sha256": model["artifact_sha256"],
         "model_profile_sha256": model.get("profile_sha256"),
+        "model_disease_universe": model.get("disease_universe"),
         "phase7_plan_sha256": sha256(plan_path),
         "input_results_sha256": sha256(results_path),
         "legacy_summary_sha256": sha256(legacy_summary_path),
