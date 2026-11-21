@@ -6,6 +6,7 @@ import pytest
 from src.phase7_experiments import (
     freeze, sha256, load_csv, read_cases, read_model_manifest, read_dataset_manifest,
     audit_rows, summarize, verify_legacy_summary, run_audit,
+    verify_plan_for_inference, verify_known_disease_membership,
 )
 
 
@@ -269,3 +270,78 @@ def test_model_universe_size_cannot_change_after_freeze(inputs):
     a['model_manifest'].write_text(json.dumps(manifest))
     with pytest.raises(ValueError, match='Frozen plan'):
         audit(a)
+
+
+def test_frozen_plan_must_match_inputs_before_prediction(inputs):
+    a=inputs
+    result=verify_plan_for_inference(
+        a['plan'], cases_path=a['cases'], model_path=a['model'],
+        methods=['overlap','xgboost'], retrieval_k=40, max_cases=0,
+    )
+    assert result['case_count']==3
+    assert result['methods']==['overlap','xgboost']
+
+
+@pytest.mark.parametrize('overrides', [
+    {'methods':['xgboost','overlap']},
+    {'retrieval_k':25},
+    {'max_cases':2},
+    {'deeprare':'fake_output.csv'},
+])
+def test_frozen_plan_blocks_changed_inference_arguments(inputs, overrides):
+    a=inputs
+    args=dict(cases_path=a['cases'],model_path=a['model'],
+              methods=['overlap','xgboost'],retrieval_k=40,max_cases=0)
+    args.update(overrides)
+    with pytest.raises(ValueError,match='frozen Phase 7|DeepRare'):
+        verify_plan_for_inference(a['plan'],**args)
+
+
+def test_frozen_plan_blocks_changed_model_even_before_inference(inputs):
+    a=inputs;a['model'].write_bytes(b'tampered and invalid')
+    with pytest.raises(ValueError,match='Model bytes'):
+        verify_plan_for_inference(a['plan'],cases_path=a['cases'],
+            model_path=a['model'],methods=['overlap','xgboost'],retrieval_k=40)
+
+
+def test_frozen_plan_blocks_changed_case_file_even_before_inference(inputs):
+    a=inputs
+    a['cases'].write_text(a['cases'].read_text().replace('SYN-A','SYN-Z'))
+    with pytest.raises(ValueError,match='Published case file'):
+        verify_plan_for_inference(a['plan'],cases_path=a['cases'],
+            model_path=a['model'],methods=['overlap','xgboost'],retrieval_k=40)
+
+
+def test_model_profile_membership_verification_reads_real_candidate_identifiers(inputs):
+    a=inputs
+    bykey=audit_rows(load_csv(a['results'],set(a['rows'][0])),read_cases(a['cases']),a['plan_data'])
+    size=verify_known_disease_membership(bykey,read_cases(a['cases']),a['plan_data'],
+                                         {'MIM:1','MIM:3','MIM:4','MIM:5'})
+    assert size==4
+
+
+def test_false_case_coverage_is_rejected_against_verified_candidate_ids(inputs):
+    a=inputs
+    for row in a['rows']:
+        if row['case_id']=='SYN-B':
+            row['known_disease']=1
+    csv_file(a['results'],a['rows'])
+    bykey=audit_rows(load_csv(a['results'],set(a['rows'][0])),read_cases(a['cases']),a['plan_data'])
+    with pytest.raises(ValueError,match='disagrees with verified model profiles'):
+        verify_known_disease_membership(
+            bykey,read_cases(a['cases']),a['plan_data'],
+            {'MIM:1','MIM:3','MIM:4','MIM:5'},
+        )
+
+
+def test_verified_candidate_count_must_match_frozen_universe(inputs):
+    a=inputs
+    bykey=audit_rows(load_csv(a['results'],set(a['rows'][0])),read_cases(a['cases']),a['plan_data'])
+    with pytest.raises(ValueError,match='disease-universe size'):
+        verify_known_disease_membership(bykey,read_cases(a['cases']),a['plan_data'],{'MIM:1','MIM:3'})
+
+
+def test_strict_membership_mode_refuses_missing_trusted_model_path(inputs):
+    a=inputs
+    with pytest.raises(ValueError,match='requires --model'):
+        audit(a,verify_model_membership=True,model_path=None)
