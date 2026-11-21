@@ -384,6 +384,108 @@ def verify_legacy_summary(legacy_rows, by_key, plan):
         raise ValueError(f"Missing legacy summary rows: {len(expected_keys-found)}")
 
 
+def research_markdown(plan, dataset, model, summary, paired, errors, overlap):
+    """Generate a research report ONLY from audited metric rows."""
+    def safe(value):
+        return str(value).replace("|", r"\|").replace("\n", " ").replace("\r", " ")
+
+    def metric(value, low, high, *, mrr=False):
+        if mrr:
+            return f"{value:.3f} [{low:.3f}, {high:.3f}]"
+        return f"{100*value:.1f}% [{100*low:.1f}%, {100*high:.1f}%]"
+
+    by_metric = {(r["cohort"], r["method"], r["metric"]): r for r in summary}
+    fields = ["top1", "top5", "mrr", "candidate_recall", "disease_coverage"]
+    lines = [
+        "# RareGenXAI — Phase 7 audited external research results",
+        "",
+        "**Research only — not for clinical diagnosis.** Retrospective published",
+        "RareBench cases may overlap HPO annotation literature.",
+        "",
+        "## Source provenance and study design",
+        "",
+        f"- Retrospective cases: **{plan['case_count']}**",
+        f"- Cohorts: {safe(', '.join(f'{key}={n}' for key,n in plan['cohorts'].items()))}",
+        f"- Methods: {safe(', '.join(plan['methods']))}",
+        f"- ML retrieval shortlist: **{plan['ml_retrieval_k']}**",
+        f"- Bootstrap seed: **{plan['bootstrap_seed']}**",
+        f"- Dataset source archive SHA-256: `{dataset['archive_sha256']}`",
+        f"- Case CSV SHA-256: `{plan['case_sha256']}`",
+        f"- Trained model SHA-256: `{model['artifact_sha256']}`",
+        "",
+        "## Per-cohort audited metrics and exploratory 95% intervals",
+        "",
+        "The list recall of the TF-IDF-based models and full-universe overlap uses",
+        "different candidate universes. Neither ranking score is a probability.",
+        "",
+        "| Cohort | Method | N | Top-1 | Top-5 | MRR | List recall | Known disease coverage |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for cohort in ["ALL", *sorted(plan["cohorts"])]:
+        for method in plan["methods"]:
+            observations = [by_metric.get((cohort, method, field)) for field in fields]
+            if any(r is None for r in observations):
+                raise ValueError(f"Missing audited cohort/method metrics: {cohort}/{method}")
+            n = observations[0]["n"]
+            metrics = [metric(float(r["estimate"]),float(r["ci95_low"]),float(r["ci95_high"]),
+                              mrr=(r["metric"] == "mrr")) for r in observations]
+            lines.append(f"| {safe(cohort)} | {safe(method)} | {n} | " + " | ".join(metrics) + " |")
+
+    lines += [
+        "",
+        "## Paired differences from exact-overlap baseline on identical case IDs",
+        "",
+        "Signed differences are exploratory; they do NOT establish statistical",
+        "significance, calibrated risk, or clinical superiority.",
+        "",
+        "| Cohort | Method | Metric | N | Difference [95% bootstrap interval] |",
+        "| --- | --- | --- | ---: | ---: |",
+    ]
+    for r in paired:
+        lines.append(
+            f"| {safe(r['cohort'])} | {safe(r['method'])} | {safe(r['metric'])} "
+            f"| {r['n']} | {r['difference']:+.3f} "
+            f"[{r['ci95_low']:+.3f}, {r['ci95_high']:+.3f}] |"
+        )
+    lines += [
+        "",
+        "## Case error categories",
+        "",
+        "| Cohort | Method | Error category | Count | Share |",
+        "| --- | --- | --- | ---: | ---: |",
+    ]
+    for r in errors:
+        lines.append(f"| {safe(r['cohort'])} | {safe(r['method'])} | {safe(r['error_category'])} "
+                     f"| {r['count']} | {100*r['fraction']:.1f}% |")
+    lines += [
+        "",
+        "## Recorded disease-ID overlap with synthetic training and heldout sets",
+        "",
+        "Disease-ID overlap is NOT evidence that the specific patient record was",
+        "used in training, nor is heldout membership proof of no HPO literature leakage.",
+        "",
+        "| Cohort | Synthetic split membership | Count | Share |",
+        "| --- | --- | ---: | ---: |",
+    ]
+    for r in overlap:
+        lines.append(f"| {safe(r['cohort'])} | {safe(r['split_membership'])} "
+                     f"| {r['count']} | {100*r['fraction']:.1f}% |")
+    lines += [
+        "",
+        "## Limitations",
+        "",
+        "- Retrospective published cases, not independent prospective clinical validation.",
+        "- Synthetic HPO disease-annotation training may overlap published case literature.",
+        "- Different ML retrieval and ontology baseline candidate universes.",
+        "- Small/diagnosis-correlated cohorts limit uncertainty interpretation.",
+        "- No genuine matched-case DeepRare outputs or calibrated disease probabilities.",
+        "",
+        "Inspect the source manifests, phase7_provenance.json and original case files.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def write_csv(path, rows):
     if not rows:
         return None
@@ -452,6 +554,11 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
     for name, data in names.items():
         if data:
             hashes[name] = write_csv(out/name, data)
+    report_path = out / "phase7_research_report.md"
+    report_path.write_text(
+        research_markdown(plan, dataset, model, summary, paired, errors, overlap),
+        encoding="utf-8",
+    )
     provenance = {
         "schema": PLAN_SCHEMA,
         "status": "audited_observed_external_results_not_prospective_clinical_validation",
@@ -469,6 +576,7 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
         "input_results_sha256": sha256(results_path),
         "legacy_summary_sha256": sha256(legacy_summary_path),
         "output_csv_sha256": hashes,
+        "research_report_sha256": sha256(report_path),
         "rank_universe_note": f"ML top-{plan['ml_retrieval_k']} retrieval vs ontology baseline full disease universe; candidate_recall is observed truth in returned list, not a common retrieval recall",
         "model_membership_verified_from_bundle": verify_model_membership,
         "honesty": "Paired exploratory bootstrap confidence intervals; no clinical significance, prospective independence, calibrated disease probabilities or matched DeepRare run",
