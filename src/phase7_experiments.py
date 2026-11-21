@@ -19,7 +19,7 @@ METHODS = frozenset({
     "overlap", "semantic", "quality_semantic", "tfidf", "logistic",
     "random_forest", "xgboost", "mlp", "DeepRare_external",
 })
-METRICS = ("top1", "top5", "mrr", "candidate_recall")
+METRICS = ("top1", "top5", "mrr", "candidate_recall", "disease_coverage")
 RESULT_COLUMNS = frozenset({
     "case_id", "cohort", "method", "true_disease_id", "known_disease",
     "rank", "top1", "top5", "reciprocal_rank", "retrieval_k",
@@ -63,6 +63,8 @@ def read_cases(path):
             raise ValueError(f"Empty/invalid case, disease, or HPO terms: {case_id!r}")
         if case_id in found:
             raise ValueError(f"Duplicate case ID: {case_id}")
+        if cohort == "ALL":
+            raise ValueError("ALL is a reserved cohort aggregation label")
         if any(len(t) != 10 or not t.startswith("HP:") or not t[3:].isdigit() for t in terms):
             raise ValueError(f"Invalid canonical seven-digit HPO ID: {case_id}")
         if len(set(terms)) != len(terms):
@@ -104,6 +106,8 @@ def freeze(cases_path, dataset_manifest_path, model_manifest_path, methods, *, m
         raise ValueError("Unsupported/duplicate/empty method selection")
     if "DeepRare_external" in methods:
         raise ValueError("Authentic DeepRare predictions must be verified separately before inclusion")
+    if "overlap" not in methods or len(methods) < 2:
+        raise ValueError("Phase 7 paired comparison requires overlap and at least one other method")
     if not isinstance(retrieval_k, int) or retrieval_k < 1:
         raise ValueError("retrieval_k must be positive")
     if not isinstance(seed, int) or not isinstance(max_cases, int) or max_cases < 0:
@@ -181,7 +185,8 @@ def audit_rows(rows, cases, plan):
         by_key[key] = {"case_id": key[0], "method": key[1], "cohort": case["cohort"],
                        "true_disease_id": case["disease_id"], "known_disease": known,
                        "rank": rank, "top1": top1, "top5": top5,
-                       "mrr": expected_reciprocal, "candidate_recall": int(rank is not None)}
+                       "mrr": expected_reciprocal, "candidate_recall": int(rank is not None),
+                       "disease_coverage": known}
     if set(by_key) != expected:
         raise ValueError(f"Incomplete paired evaluation: missing {len(expected-set(by_key))} case/method rows")
     for case_id in selected:
@@ -254,6 +259,8 @@ def summarize(by_key, plan, *, replicates=2000):
             if "overlap" not in plan["methods"]:
                 continue
             for field in METRICS:
+                if field == "disease_coverage":
+                    continue  # Same knowledge universe for all methods: trivial zero difference.
                 values = [by_key[c, method][field] - by_key[c, "overlap"][field] for c in ids]
                 low, high = _ci(values, _rng(plan["bootstrap_seed"], cohort, method, field, "paired"), replicates)
                 paired.append({"cohort": cohort, "method": method, "baseline": "overlap",
