@@ -92,6 +92,7 @@ jobs:
             results/phase7_cohort_metrics.csv
             results/phase7_paired_effects.csv
             results/phase7_error_analysis.csv
+            results/phase7_synthetic_training_overlap.csv
             results/ml_summary.csv
             models/raregen_ml.manifest.json
             data/raw/manifest.json
