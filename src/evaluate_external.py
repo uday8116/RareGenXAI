@@ -71,15 +71,9 @@ def main():
     # Use the exact same candidate disease universe and HPO evidence snapshot
     # for knowledge baselines and supervised models.
     ml, manifest = load_verified_bundle(args.model)
-    # A frozen protocol requires every requested method to be available before
-    # the first case is scored. Never silently omit a missing trained model.
-    required_models = set(args.methods) - {"tfidf", "overlap", "semantic", "quality_semantic"}
-    missing_models = sorted(required_models - set(ml.models))
-    if missing_models:
-        raise ValueError(
-            "Requested methods are unavailable in the verified model bundle: "
-            + ", ".join(missing_models)
-        )
+    # A frozen protocol requires every requested method before scoring a case.
+    from src.phase7_experiments import require_trained_models
+    require_trained_models(args.methods, ml.models)
     profiles = ml.profiles
     labels = ml.labels
     comparison = {}
