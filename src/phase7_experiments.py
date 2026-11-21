@@ -22,7 +22,7 @@ METHODS = frozenset({
 METRICS = ("top1", "top5", "mrr", "candidate_recall")
 RESULT_COLUMNS = frozenset({
     "case_id", "cohort", "method", "true_disease_id", "known_disease",
-    "rank", "top1", "top5", "reciprocal_rank",
+    "rank", "top1", "top5", "reciprocal_rank", "retrieval_k",
 })
 CASE_COLUMNS = frozenset({"case_id", "disease_id", "hpo_ids"})
 PLAN_SCHEMA = "raregen_phase7_preregistered_v1"
@@ -161,6 +161,8 @@ def audit_rows(rows, cases, plan):
     expected = {(c, method) for c in selected for method in plan["methods"]}
     for r in rows:
         key = (r["case_id"].strip(), r["method"].strip())
+        if not r["retrieval_k"].isdecimal() or int(r["retrieval_k"]) != plan["ml_retrieval_k"]:
+            raise ValueError(f"Retrieval candidate limit differs from frozen protocol for {key}")
         if key not in expected or key in by_key:
             raise ValueError(f"Unexpected or duplicate case/method result: {key}")
         case = cases[key[0]]
