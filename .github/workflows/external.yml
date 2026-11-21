@@ -62,7 +62,8 @@ jobs:
             --cases data/external/rarebench_cases.csv \
             --model models/raregen_ml.joblib \
             --methods tfidf logistic random_forest xgboost mlp overlap \
-            --retrieval-k 40 --out results/external_case_results.csv
+            --retrieval-k 40 --phase7-plan results/phase7_plan.json \
+            --out results/external_case_results.csv
       - name: Phase 7 strict paired cohort and provenance audit
         run: |
           python -m src.phase7_experiments audit \

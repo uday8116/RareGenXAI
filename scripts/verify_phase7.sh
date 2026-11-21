@@ -64,7 +64,7 @@ echo "=== Evaluate every eligible published external case with the frozen method
   --cases data/external/rarebench_cases.csv \
   --model models/raregen_ml.joblib \
   --methods tfidf logistic random_forest xgboost mlp overlap \
-  --retrieval-k 40 --out results/external_case_results.csv
+  --retrieval-k 40 --phase7-plan "$PLAN" --out results/external_case_results.csv
 
 echo "=== Audit case-method alignment, metrics, paired intervals and errors ==="
 "$PYTHON" -m src.phase7_experiments audit \
