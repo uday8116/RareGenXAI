@@ -324,9 +324,18 @@ def run_audit(*, cases_path, results_path, legacy_summary_path, plan_path,
     ids = list(cases)[:plan["selection_first_n"] or None]
     if plan["case_ids"] != ids or plan["case_count"] != len(ids):
         raise ValueError("Case selection changed after evaluation plan was frozen")
-    if (set(plan["methods"]) - METHODS or not plan["methods"]
-            or "DeepRare_external" in plan["methods"]):
-        raise ValueError("Plan includes unsupported/unverified evaluation methods")
+    if (set(plan["methods"]) - METHODS or len(plan["methods"]) < 2
+            or len(set(plan["methods"])) != len(plan["methods"])
+            or "DeepRare_external" in plan["methods"]
+            or "overlap" not in plan["methods"]):
+        raise ValueError("Plan includes unsupported, duplicated, or unmatched evaluation methods")
+    cohorts = dict(sorted(Counter(cases[c]["cohort"] for c in ids).items()))
+    if plan.get("cohorts") != cohorts:
+        raise ValueError("Frozen cohort composition differs from actual selected case set")
+    if not isinstance(plan.get("ml_retrieval_k"), int) or plan["ml_retrieval_k"] < 1:
+        raise ValueError("Frozen ML retrieval candidate limit must be positive")
+    if not isinstance(plan.get("bootstrap_seed"), int):
+        raise ValueError("Frozen bootstrap seed is invalid")
     rows = load_csv(results_path, RESULT_COLUMNS)
     by_key = audit_rows(rows, cases, plan)
     legacy = load_csv(legacy_summary_path, {"cohort", "method", "n", "top1", "top5", "mrr", "candidate_recall", "disease_coverage"})
