@@ -71,6 +71,15 @@ def main():
     # Use the exact same candidate disease universe and HPO evidence snapshot
     # for knowledge baselines and supervised models.
     ml, manifest = load_verified_bundle(args.model)
+    # A frozen protocol requires every requested method to be available before
+    # the first case is scored. Never silently omit a missing trained model.
+    required_models = set(args.methods) - {"tfidf", "overlap", "semantic", "quality_semantic"}
+    missing_models = sorted(required_models - set(ml.models))
+    if missing_models:
+        raise ValueError(
+            "Requested methods are unavailable in the verified model bundle: "
+            + ", ".join(missing_models)
+        )
     profiles = ml.profiles
     labels = ml.labels
     comparison = {}
@@ -98,8 +107,6 @@ def main():
         obs = [(t, "confirmed_present") for t in terms]
         for method in args.methods:
             if method in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
-                if method != "tfidf" and method not in ml.models:
-                    continue
                 rows = ml.rank(obs, model=method, k=args.retrieval_k)
             else:
                 rows = rank(obs, profiles, parents, ic, labels,
