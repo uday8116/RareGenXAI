@@ -29,6 +29,18 @@ CASE_COLUMNS = frozenset({"case_id", "disease_id", "hpo_ids"})
 PLAN_SCHEMA = "raregen_phase7_preregistered_v1"
 
 
+
+def require_trained_models(methods, available_models):
+    """Fail before patient inference when any frozen trained reranker is missing."""
+    trained = set(methods) - {"tfidf", "overlap", "semantic", "quality_semantic"}
+    missing = sorted(trained - set(available_models))
+    if missing:
+        raise ValueError(
+            "Requested methods are unavailable in the verified model bundle: "
+            + ", ".join(missing)
+        )
+
+
 def sha256(path):
     digest = hashlib.sha256()
     with Path(path).open("rb") as f:
