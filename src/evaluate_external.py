@@ -45,15 +45,24 @@ def main():
     parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap", "semantic", "quality_semantic"])
     parser.add_argument("--max-cases", type=int, default=0)
     parser.add_argument("--retrieval-k", type=int, default=40, help="Pre-registered TF-IDF candidate shortlist size")
+    parser.add_argument("--phase7-plan", type=Path, default=None,
+                        help="Require matching frozen Phase 7 protocol BEFORE any inference")
     args = parser.parse_args()
-    if args.retrieval_k <= 0:
-        raise ValueError("--retrieval-k must be positive")
+    if args.retrieval_k <= 0 or args.max_cases < 0:
+        raise ValueError("--retrieval-k must be positive and --max-cases nonnegative")
     allowed = {"tfidf", "logistic", "random_forest", "xgboost", "mlp",
                "overlap", "semantic", "quality_semantic"}
     if not args.methods or any(m not in allowed for m in args.methods):
         raise ValueError(f"Invalid model method; choose from {sorted(allowed)}")
     if len(set(args.methods)) != len(args.methods):
         raise ValueError("Duplicate model methods are not allowed")
+    if args.phase7_plan is not None:
+        from src.phase7_experiments import verify_plan_for_inference
+        verify_plan_for_inference(
+            args.phase7_plan, cases_path=args.cases, model_path=args.model,
+            methods=args.methods, retrieval_k=args.retrieval_k,
+            max_cases=args.max_cases, deeprare=args.deeprare,
+        )
     cases = read_cases(args.cases)
     if args.max_cases > 0:
         cases = cases[:args.max_cases]
