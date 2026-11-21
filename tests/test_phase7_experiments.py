@@ -345,3 +345,27 @@ def test_strict_membership_mode_refuses_missing_trusted_model_path(inputs):
     a=inputs
     with pytest.raises(ValueError,match='requires --model'):
         audit(a,verify_model_membership=True,model_path=None)
+
+
+def test_generated_research_report_contains_only_audited_metrics_and_source_hashes(inputs):
+    a=inputs
+    result=audit(a)
+    path=a['out']/'phase7_research_report.md'
+    assert path.is_file()
+    report=path.read_text(encoding='utf-8')
+    assert "RareGenXAI" in report
+    assert "Retrospective" in report
+    assert "Top-1" in report and "Known disease coverage" in report
+    assert "xgboost" in report and "toyA" in report
+    assert "No genuine matched-case DeepRare" in report
+    assert a['plan_data']['model_artifact_sha256'] in report
+    assert result['research_report_sha256']==sha256(path)
+    assert 'SYN-A' not in report  # Aggregated report excludes case-level records
+
+
+def test_report_deterministic_across_identical_observations(inputs):
+    a=inputs
+    audit(a)
+    report=(a['out']/'phase7_research_report.md').read_bytes()
+    audit(a)
+    assert report==(a['out']/'phase7_research_report.md').read_bytes()
