@@ -6,7 +6,7 @@ import pytest
 from src.phase7_experiments import (
     freeze, sha256, load_csv, read_cases, read_model_manifest, read_dataset_manifest,
     audit_rows, summarize, verify_legacy_summary, run_audit,
-    verify_plan_for_inference, verify_known_disease_membership,
+    verify_plan_for_inference, verify_known_disease_membership, require_trained_models,
 )
 
 
@@ -369,3 +369,19 @@ def test_report_deterministic_across_identical_observations(inputs):
     report=(a['out']/'phase7_research_report.md').read_bytes()
     audit(a)
     assert report==(a['out']/'phase7_research_report.md').read_bytes()
+
+
+def test_missing_preregistered_trained_model_fails_before_scoring():
+    with pytest.raises(ValueError, match="xgboost"):
+        require_trained_models(
+            ["tfidf", "logistic", "xgboost", "mlp", "overlap"],
+            {"logistic": object(), "mlp": object()},
+        )
+
+
+def test_all_available_preregistered_methods_pass_preflight():
+    assert require_trained_models(
+        ["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap"],
+        {"logistic": object(), "random_forest": object(),
+         "xgboost": object(), "mlp": object()},
+    ) is None
