@@ -46,7 +46,7 @@ def inputs(tmp_path):
                             'known_disease':int(c['case_id']!='SYN-B'),
                             'rank':rank or '', 'top1':int(rank==1),
                             'top5':int(rank is not None and rank<=5),
-                            'reciprocal_rank':1/rank if rank else 0})
+                            'reciprocal_rank':1/rank if rank else 0,'retrieval_k':40})
     raw=tmp_path/'results.csv';csv_file(raw,results)
     # Echo the legacy generated summary from the verified raw case rows.
     bykey=audit_rows(load_csv(raw,set(results[0])),read_cases(casefile),plan)
@@ -177,4 +177,10 @@ def test_model_bytes_must_agree_with_manifest(inputs):
 def test_case_coverage_consistent_across_methods(inputs):
     a=inputs;a['rows'][0]['known_disease']=0;csv_file(a['results'],a['rows'])
     with pytest.raises(ValueError,match='Conflicting disease-coverage'):
+        audit(a)
+
+
+def test_changed_retrieval_limit_is_rejected(inputs):
+    a=inputs;a['rows'][0]['retrieval_k']=25;csv_file(a['results'],a['rows'])
+    with pytest.raises(ValueError,match='Retrieval candidate limit'):
         audit(a)
