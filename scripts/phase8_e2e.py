@@ -89,7 +89,9 @@ def validate_live():
     assert http(WEB, "/")
     hpos = http(WEB, "/api/v1/phenotypes/search?q=seizure&limit=10")
     assert isinstance(hpos, list) and hpos
-    phenotype = next((x for x in hpos if x["hpo_id"] == "HP:0001250"), hpos[0])
+    phenotype = next((x for x in hpos if x["hpo_id"] == "HP:0001250"), None)
+    if phenotype is None:
+        raise AssertionError("Official HP:0001250 seizure phenotype was not returned by HPO search")
     hpo = phenotype["hpo_id"]
     observations = [{"hpo_id": hpo, "status": "confirmed_present"}]
     rank = http(WEB, "/api/v1/rank", {"observations": observations, "method": "overlap", "top_k": 3})
@@ -119,8 +121,17 @@ def validate_live():
         [{"hpo_id": "HP:9999999", "status": "confirmed_present"}],
         [{"hpo_id": "HP:0000118", "status": "confirmed_present"}],
         observations * 2,
+        [{"hpo_id": hpo, "status": "invalid_status"}],
+        observations * 21,
     ):
         http(WEB, "/api/v1/rank", {"observations": bad, "method": "overlap"}, expected=422)
+    for invalid in (
+        {"observations": observations, "method": "unsupported_model"},
+        {"observations": observations, "method": "overlap", "top_k": 0},
+        {"observations": observations, "method": "overlap", "candidates": 101},
+        {"observations": [], "method": "overlap"},
+    ):
+        http(WEB, "/api/v1/rank", invalid, expected=422)
     print("PASS: real HPO search, read-only rank, explanation provenance, proxy, and 422 guards")
     print(f"Knowledge diseases: {ready['disease_count']}; model status: {model['status']}")
     print("Research only: no clinical accuracy or privacy certification is implied")
@@ -137,9 +148,14 @@ def round_trip(python_exe, *, restart):
                                stderr=subprocess.STDOUT)
         processes.append(api)
         wait_for_server(api, API, "/api/v1/health")
-        ui = subprocess.Popen(["npm", "run", "dev"], cwd=ROOT / "frontend",
-                              start_new_session=True, stdout=subprocess.DEVNULL,
-                              stderr=subprocess.STDOUT)
+        # Launch Node directly, not an npm shell that can leave an orphan Vite child.
+        vite = ROOT / "frontend" / "node_modules" / "vite" / "bin" / "vite.js"
+        if not vite.is_file():
+            raise RuntimeError("Vite executable missing. Run: cd frontend && npm install")
+        ui = subprocess.Popen(["node", str(vite), "--host", "127.0.0.1",
+                               "--port", "5173", "--strictPort"],
+                              cwd=ROOT / "frontend", start_new_session=True,
+                              stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
         processes.append(ui)
         wait_for_server(ui, WEB, "/")
         validate_live()
