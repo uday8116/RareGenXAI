@@ -12,6 +12,7 @@ import signal
 import socket
 import subprocess
 import sys
+import tempfile
 import time
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
@@ -141,10 +142,12 @@ def round_trip(python_exe, *, restart):
         if occupied(port):
             raise RuntimeError(f"Port {port} already in use. Stop existing local servers; will not kill them.")
     processes = []
+    api_log = tempfile.TemporaryFile(mode="w+t")
+    ui_log = tempfile.TemporaryFile(mode="w+t")
     try:
         api = subprocess.Popen([python_exe, "-m", "uvicorn", "src.api:app",
                                "--host", "127.0.0.1", "--port", "8000", "--no-access-log"],
-                               cwd=ROOT, start_new_session=True, stdout=subprocess.DEVNULL,
+                               cwd=ROOT, start_new_session=True, stdout=api_log,
                                stderr=subprocess.STDOUT)
         processes.append(api)
         wait_for_server(api, API, "/api/v1/health")
@@ -155,14 +158,28 @@ def round_trip(python_exe, *, restart):
         ui = subprocess.Popen(["node", str(vite), "--host", "127.0.0.1",
                                "--port", "5173", "--strictPort"],
                               cwd=ROOT / "frontend", start_new_session=True,
-                              stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+                              stdout=ui_log, stderr=subprocess.STDOUT)
         processes.append(ui)
         wait_for_server(ui, WEB, "/")
         validate_live()
         print("PASS: local services started and verified" + (" after restart" if restart else ""))
+    except Exception:
+        # Keep errors locally in temporary files and show bounded diagnostics.
+        # Do not collect user observations or send logs to a remote service.
+        for name, log in (("FastAPI", api_log), ("Vite", ui_log)):
+            log.flush()
+            log.seek(0)
+            output = log.read()[-4000:]
+            if output:
+                print(f"{name} startup diagnostics:\\n{output}", file=sys.stderr)
+        raise
     finally:
-        for proc in reversed(processes):
-            stop(proc)
+        try:
+            for proc in reversed(processes):
+                stop(proc)
+        finally:
+            api_log.close()
+            ui_log.close()
     for port in (8000, 5173):
         if occupied(port):
             raise RuntimeError(f"Port {port} still occupied following shutdown")
