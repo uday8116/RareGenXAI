@@ -171,7 +171,7 @@ def round_trip(python_exe, *, restart):
             log.seek(0)
             output = log.read()[-4000:]
             if output:
-                print(f"{name} startup diagnostics:\\n{output}", file=sys.stderr)
+                print(f"{name} startup diagnostics:\n{output}", file=sys.stderr)
         raise
     finally:
         try:
