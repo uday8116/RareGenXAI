@@ -252,3 +252,25 @@ and local Node dependencies. Stop other services on ports 8000/5173 first.
 See [Phase 8 system verification and outstanding acceptance](docs/PHASE_08_SYSTEM_VERIFICATION.md).
 Phase 8 does not become accepted merely because the scripts were committed:
 GitHub CI and local Mac checks must actually pass. Phase 7 acceptance remains separate.
+
+
+## Phase 9 — Dissertation, user documentation and viva preparation
+
+Phase 9 contains the research user guide, API and SQLite v2 schema reference,
+technical dissertation draft, editable 12-slide outline, presentation speech,
+25 viva questions and documentation consistency tests:
+
+- [Phase 9 plan and acceptance](docs/PHASE_09_PLAN_AND_ACCEPTANCE.md)
+- [Local user guide](docs/PHASE_09_USER_GUIDE.md)
+- [API and schema reference](docs/PHASE_09_API_AND_SCHEMA.md)
+- [M.Tech dissertation working draft](docs/PHASE_09_DISSERTATION_DRAFT.md)
+- [Presentation slide source](docs/PHASE_09_PRESENTATION.md)
+- [Speech and viva questions](docs/PHASE_09_SPEECH_AND_VIVA.md)
+
+```bash
+python -m pytest -q tests/test_phase9_docs.py
+```
+
+The historical archived 178-case findings are **not** a successful fresh Phase 7
+evaluation. University formatting, real screenshots, examiner/supervisor approval,
+and the still-pending Phase 7/8 acceptance are separate requirements.
