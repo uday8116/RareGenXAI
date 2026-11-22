@@ -85,6 +85,7 @@ def validate_live():
     assert ready["ready"] is True and ready["disease_count"] > 0
     model = http(WEB, "/api/v1/models")
     assert "overlap" in model["methods"]
+    assert model["status"] == "available", "Full Phase 8 requires a verified ML model"
     assert http(WEB, "/")
     hpos = http(WEB, "/api/v1/phenotypes/search?q=seizure&limit=10")
     assert isinstance(hpos, list) and hpos
@@ -102,6 +103,17 @@ def validate_live():
     })
     assert explanation["knowledge_manifest_sha256"] == rank["knowledge_manifest_sha256"]
     assert explanation["disease_id"] == disease
+    # Exercise every available ranking pipeline using identical official HPO input.
+    for method in ("semantic", "tfidf", "logistic", "random_forest", "xgboost", "mlp"):
+        assert method in model["methods"], f"Missing configured model: {method}"
+        output = http(WEB, "/api/v1/rank", {
+            "observations": observations, "method": method, "top_k": 3,
+        })
+        assert output["method"] == method and output["requested_count"] == 1
+        assert len(output["results"]) > 0 and len(output["results"]) <= 3
+        assert output["knowledge_manifest_sha256"] == rank["knowledge_manifest_sha256"]
+        if method not in ("semantic",):
+            assert output["model_sha256"] == model["model_sha256"]
     # Malformed, duplicate and nonclinical HPO input must not produce a ranking.
     for bad in (
         [{"hpo_id": "HP:9999999", "status": "confirmed_present"}],
