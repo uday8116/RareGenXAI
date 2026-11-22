@@ -1,0 +1,48 @@
+name: Phase 8 System Verification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/phase8_e2e.py'
+      - 'scripts/verify_phase8.sh'
+      - 'tests/test_phase8_e2e.py'
+      - 'docs/PHASE_08_SYSTEM_VERIFICATION.md'
+      - '.github/workflows/phase8-system.yml'
+  pull_request:
+    paths:
+      - 'scripts/phase8_e2e.py'
+      - 'scripts/verify_phase8.sh'
+      - 'tests/test_phase8_e2e.py'
+      - 'docs/PHASE_08_SYSTEM_VERIFICATION.md'
+      - '.github/workflows/phase8-system.yml'
+  workflow_dispatch:
+jobs:
+  offline-system-guards:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install application dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Validate shell recipe
+        run: bash -n scripts/verify_phase8.sh
+      - name: Offline service, API and input-validation tests
+        run: bash scripts/verify_phase8.sh --quick
+      - name: Check scripts parse
+        run: python -m py_compile scripts/phase8_e2e.py tests/test_phase8_e2e.py
+  frontend-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install
+      - run: npm run check
