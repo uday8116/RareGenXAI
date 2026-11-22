@@ -233,3 +233,22 @@ The Phase 7 correctness review now rejects logically impossible ranks, binds the
 **Historical evidence was independently reanalysed:** the successful published-case benchmark archive from [GitHub Actions run 44467435510](https://github.com/uday8116/RareGenXAI/actions/runs/44467435510) contains 178 cases and 1,068 saved rankings. Every case/method row was checked against the historical reported metrics; exploratory paired confidence intervals and error breakdowns were recomputed from those archived predictions. Exact-overlap Top-1 was **37.64%** on that old snapshot. This is **not** a newly executed Phase 7 benchmark and not clinical validation, and the archive does not contain the original HPO observations or the trained model bytes.
 
 See [archived RareBench reanalysis](docs/PHASE_07_HISTORICAL_REANALYSIS.md) and the reusable `src/phase7_historical_reaudit.py` CLI. Its synthetic archive regression suite passed **10/10 tests** locally using byte-identical committed code. The expanded current live-evaluation audit tests and a new full official HPO+RareBench run still require CI or the owner's Mac. Phase 7 PR #11 therefore remains open.
+
+
+## Phase 8 — Automated system verification (local Mac)
+
+Phase 8 implements an offline guard suite and a strict real-system check that
+starts FastAPI and the React Vite server, exercises the actual loopback API through
+the frontend proxy (HPO search, all installed ML ranking methods, explanations and
+invalid-input rejection), then shuts both servers down and repeats a cold start.
+
+```bash
+bash scripts/verify_phase8.sh --quick  # offline tests, not acceptance
+bash scripts/verify_phase8.sh --full   # real HPO/model data, React tests/build, two restarts
+```
+
+The full command requires verified official HPO data, a trained verified model
+and local Node dependencies. Stop other services on ports 8000/5173 first.
+See [Phase 8 system verification and outstanding acceptance](docs/PHASE_08_SYSTEM_VERIFICATION.md).
+Phase 8 does not become accepted merely because the scripts were committed:
+GitHub CI and local Mac checks must actually pass. Phase 7 acceptance remains separate.
