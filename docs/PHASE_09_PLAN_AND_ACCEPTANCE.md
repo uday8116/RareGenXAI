@@ -12,6 +12,7 @@
 | 12-slide editable presentation source | `PHASE_09_PRESENTATION.md` | Presenter must transfer to university PowerPoint template |
 | Plain-English demo speech, 25 viva answers | `PHASE_09_SPEECH_AND_VIVA.md` | Must use actual observed state at defense |
 | Completion/evidence boundaries | This file | Keeps technical preparation separate from official approval |
+| Archived experiment snapshot reconciliation | `PHASE_09_EVIDENCE_LEDGER.md` | Explains why legacy vs newer six-method scores differ |
 
 ## Evidence ledger
 
@@ -24,6 +25,7 @@
 ## Pre-submission gates
 
 - [x] User guide and architecture/API/schema reference written.
+- [x] Legacy/newer experimental snapshots reconciled in an evidence ledger.
 - [x] Dissertation technical draft written, with historical-results labeling.
 - [x] 12-slide editable Markdown presentation source and full speech/viva prep written.
 - [ ] Latest documentation integrity automation executes successfully.
@@ -36,6 +38,10 @@
 ## Safe update rule
 
 When newer verified results become available, update *all* result tables in the dissertation, presentation and speech together and cite the exact run/artifact, input/model hashes, case count and methods. Do not silently mix older and newer snapshots. This is an academic deliverable, not a clinical device submission.
+
+## Independent review safeguards
+
+The repository contains an older `docs/FINAL_PROJECT_REPORT.md` with different trained-model results and an earlier `docs/REPORT_DRAFT.md` that predates the React/FastAPI architecture. Both are now marked as **historical** and direct readers to the Phase 9 evidence ledger. Do not merge their figures with the Phase 9 dissertation results.
 
 ## Optional documentation verification
 
