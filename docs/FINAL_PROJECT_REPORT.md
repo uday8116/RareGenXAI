@@ -1,3 +1,5 @@
+> **Historical snapshot notice (Phase 9 audit):** This report uses an **earlier** saved 178-case benchmark run (43485509434). Its Logistic Regression and TF-IDF results differ from the later saved six-method archive used for the Phase 9 viva. These are **different experiments**; do not combine their numbers. See [Phase 9 evidence ledger](PHASE_09_EVIDENCE_LEDGER.md) and [Phase 9 dissertation draft](PHASE_09_DISSERTATION_DRAFT.md). Neither snapshot establishes clinical validity.
+
 # RareGenXAI — final project report (research prototype)
 
 ## Abstract
