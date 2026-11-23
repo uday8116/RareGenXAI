@@ -138,3 +138,5 @@ bash scripts/start_api.sh
 Open **http://127.0.0.1:8000/docs** for interactive Swagger/OpenAPI documentation, **http://127.0.0.1:8000/redoc** for the reference, or **http://127.0.0.1:8000/api/v1/health** for liveness. Versioned APIs include phenotype and disease search, knowledge statistics, model readiness, and explainable research ranking.
 
 The server binds to loopback only and never stores patient observations. No AWS, Railway or external database is needed. See [Phase 4 backend plan and API documentation](docs/PHASE_04_BACKEND.md). The professional website and model dashboard remain a separate frontend phase.
+
+See [Phase 4 independent acceptance review](docs/PHASE_04_REVIEW.md) for the additional local-only API safeguards, clinical-phenotype validation, score filtering and GitHub acceptance status.

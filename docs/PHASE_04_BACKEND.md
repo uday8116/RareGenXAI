@@ -112,15 +112,24 @@ For overlap and semantic, each candidate has an evidence list with HPO match and
 ### Error responses
 
 - 200 — valid success; an empty search can return an empty list.
+- 400 — untrusted Host header; 403 — non-loopback client (local-only policy).
 - 404 — disease or HPO ID not found.
-- 422 — invalid request, too many observations, unsupported model or observation status, duplicate/obsolete HPO IDs.
+- 422 — invalid request, too many observations, unsupported model or observation status, duplicate/obsolete/nonclinical HPO IDs.
 - 503 — required local database not prepared, or the requested verified ML model unavailable/incompatible.
 
 No fallback to an untrained classifier is performed.
 
+## Phase 4 correctness review
+
+The [Phase 4 independent audit](PHASE_04_REVIEW.md) strengthens the original API by validating that ranking HPO IDs are clinical phenotypic abnormalities (descendants of `HP:0000118`), excluding unrelated zero/negative-score baseline diseases, and rejecting remote peers and untrusted Host headers even if a developer misconfigures Uvicorn's bind address. The official-data integration test now requires all seven ranking methods to run when requested in CI. A valid query with no positive baseline evidence returns `results: []`.
+
+The reviewed API adds `Cache-Control: no-store` for normal responses and uses explicit 503 responses for SQLite files disappearing during local rebuilds. The endpoint names, request bodies and response fields remain unchanged.
+
+**Review verification status:** PR #8 includes the changes; see its Actions checks. A previously working CI run does not prove the reviewed changes passed. The latest GitHub Actions runs may require investigation if they fail before starting any steps.
+
 ## Security scope
 
-This service is for *local research demonstrations only*. It binds to loopback 127.0.0.1; the default launch script disables access logging. The API has no patient/account creation, uploads, diagnosis history or cloud calls. The SQLite file is opened read-only. CORS only permits localhost / 127.0.0.1 frontend origins on ports 5173 or 3000. CORS is not authentication. Do not bind to a public interface or use identifiable patient information: authentication, rate limiting, TLS, user consent workflows, security review and clinical privacy certifications are not in scope. Only load joblib model files you trained yourself or obtained from a trusted GitHub workflow; SHA-256 integrity alone is not a digital signature.
+This service is for *local research demonstrations only*. It binds to loopback 127.0.0.1; the default launch script disables access logging. The API has no patient/account creation, uploads, diagnosis history or cloud calls. The SQLite file is opened read-only. The application also rejects remote peer addresses and untrusted Host headers, even if accidentally exposed. CORS only permits localhost / 127.0.0.1 frontend origins on ports 5173 or 3000. CORS is not authentication. Do not bind to a public interface or use identifiable patient information: authentication, rate limiting, TLS, user consent workflows, security review and clinical privacy certifications are not in scope. Only load joblib model files you trained yourself or obtained from a trusted GitHub workflow; SHA-256 integrity alone is not a digital signature.
 
 ## Tests and acceptance criteria
 

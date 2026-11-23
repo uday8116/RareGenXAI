@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import sqlite3
+import os
+import shutil
 
 import numpy as np
 import pytest
@@ -23,9 +25,11 @@ def client(tmp_path):
             "INSERT INTO hpo_terms(hpo_id,name,definition,is_obsolete) VALUES (?,?,?,?)",
             [
                 ("HP:0000001", "All", "", 0),
+                ("HP:0000006", "Autosomal dominant inheritance", "", 0),
                 ("HP:0000118", "Phenotypic abnormality", "", 0),
                 ("HP:0001250", "Seizure", "A clinical phenotype", 0),
                 ("HP:0001263", "Global developmental delay", "", 0),
+                ("HP:0008000", "Unused phenotype", "", 0),
                 ("HP:0999999", "Old term", "", 1),
             ],
         )
@@ -37,7 +41,9 @@ def client(tmp_path):
         )
         conn.executemany("INSERT INTO hpo_parents(child_id,parent_id) VALUES (?,?)", [
             ("HP:0001250", "HP:0000118"), ("HP:0001263", "HP:0000118"),
+            ("HP:0008000", "HP:0000118"),
             ("HP:0000118", "HP:0000001"),
+            ("HP:0000006", "HP:0000001"),
         ])
         conn.executemany(
             "INSERT INTO diseases(disease_id,name) VALUES (?,?)",
@@ -98,7 +104,7 @@ def test_database_readiness_and_provenance(client):
     assert ready.json()["model_status"] == "missing"
     stats = client.get("/api/v1/knowledge/stats").json()
     assert stats["schema_version"] == "2"
-    assert stats["counts"]["hpo_terms"] == 5
+    assert stats["counts"]["hpo_terms"] == 7
     assert len(stats["sources"]) == 2
 
 
@@ -139,6 +145,8 @@ def test_rank_overlap_explanations_canonicalization(client):
     assert result["results"][0]["evidence"][0]["hpo_id"] == "HP:0001250"
     assert result["model_sha256"] is None
     assert "not calibrated" in result["disclaimer"].lower()
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_semantic_and_negative_observation(client):
@@ -151,7 +159,8 @@ def test_semantic_and_negative_observation(client):
         ],
     })
     assert response.status_code == 200, response.text
-    assert len(response.json()["results"]) == 2
+    assert 0 < len(response.json()["results"]) <= 2
+    assert all(row["score"] > 0 for row in response.json()["results"])
     assert all("contribution" in e for r in response.json()["results"] for e in r["evidence"])
 
 
@@ -231,3 +240,64 @@ def test_openapi_and_local_cors(client):
         "Access-Control-Request-Method": "POST",
     })
     assert "access-control-allow-origin" not in blocked.headers
+
+
+
+def test_reject_nonclinical_hpo_ids_even_when_present_in_ontology(client):
+    for hpo_id in ("HP:0000001", "HP:0000006", "HP:0000118"):
+        response = client.post("/api/v1/rank", json={
+            "method": "overlap",
+            "observations": [{"hpo_id": hpo_id, "status": "confirmed_present"}],
+        })
+        assert response.status_code == 422, response.text
+        assert "clinical phenotypic" in response.json()["detail"]
+
+
+def test_zero_score_baseline_does_not_offer_unrelated_diseases(client):
+    response = client.post("/api/v1/rank", json={
+        "method": "overlap",
+        "observations": [
+            {"hpo_id": "HP:0008000", "status": "confirmed_present"},
+        ],
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()["results"] == []
+
+
+def test_local_network_restrictions_even_if_server_is_exposed(client):
+    from fastapi.testclient import TestClient
+
+    assert client.get("/api/v1/health").status_code == 200
+    bad_host = client.get("/api/v1/health", headers={"host": "untrusted.example"})
+    assert bad_host.status_code == 400
+    with TestClient(client.app, client=("198.51.100.43", 44120)) as remote:
+        denied = remote.get("/api/v1/health")
+        assert denied.status_code == 403
+        assert "local-only" in denied.json()["detail"].lower()
+
+
+def test_database_open_failure_mid_request_returns_service_unavailable(client, monkeypatch):
+    # Warm the public-knowledge cache first so a later read uses it.
+    assert client.get("/api/v1/ready").status_code == 200
+
+    def disappear(*args, **kwargs):
+        raise FileNotFoundError("simulated atomic replacement interval")
+
+    monkeypatch.setattr("src.api.open_readonly", disappear)
+    response = client.get("/api/v1/phenotypes/search", params={"q": "seizure"})
+    assert response.status_code == 503
+    assert "database" in response.json()["detail"].lower()
+
+
+def test_database_snapshot_key_changes_on_atomic_file_replacement(client, tmp_path):
+    service = client.app.state.research_service
+    before = service.context()
+    old_key = service._file_key(service.db_path)
+    staged = tmp_path / "replacement.sqlite3"
+    shutil.copy2(service.db_path, staged)
+    os.replace(staged, service.db_path)
+    new_key = service._file_key(service.db_path)
+    assert new_key != old_key
+    after = service.context()
+    assert after is not before
+    assert after["counts"]["hpo_terms"] == before["counts"]["hpo_terms"]
