@@ -243,3 +243,9 @@ frontend/node_modules/
 frontend/dist/
 frontend/coverage/
 frontend/.vite/
+
+# Phase 10 private backup/release staging — NEVER commit local model/data archives
+*research-backup*.zip
+raregen-research-backup*.zip
+backups/
+release-artifacts/
