@@ -110,6 +110,7 @@ def create(root, target, include_cases=False):
     manifest["missing_core"] = [name for name in CORE_FILES if name not in manifest["files"]]
     fd, temp_name = tempfile.mkstemp(prefix=".phase10-", suffix=".zip", dir=target.parent)
     os.close(fd)
+    created_target = False
     try:
         with zipfile.ZipFile(temp_name, "w", compression=zipfile.ZIP_DEFLATED,
                              compresslevel=6, allowZip64=True) as archive:
@@ -119,11 +120,12 @@ def create(root, target, include_cases=False):
         verify(temp_name)
         # Fail rather than clobber an existing backup created during packaging.
         with open(temp_name, "rb") as src, target.open("xb") as dst:
+            created_target = True
             for chunk in iter(lambda: src.read(1024 * 1024), b""):
                 dst.write(chunk)
     except Exception:
-        if target.exists():
-            target.unlink()
+        if created_target:
+            target.unlink(missing_ok=True)
         raise
     finally:
         Path(temp_name).unlink(missing_ok=True)
