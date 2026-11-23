@@ -9,11 +9,15 @@ persists observations. Do NOT bind to 0.0.0.0 or expose it to the internet.
 from __future__ import annotations
 
 import sqlite3
+from contextlib import contextmanager
+from ipaddress import ip_address
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Path as URLPath, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.api_schemas import (
     DiseaseDetail, DiseaseMatch, KnowledgeStats, ModelStatus,
@@ -57,13 +61,38 @@ def create_app(
         allow_credentials=False, allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"], max_age=600,
     )
+    # CORS does not block nonbrowser HTTP clients: require loopback origin.
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=["localhost", "127.0.0.1", "testserver"],
+    )
+
+    @app.middleware("http")
+    async def restrict_to_loopback(request: Request, call_next):
+        peer = request.client.host if request.client else None
+        if peer != "testclient":
+            try:
+                allowed = peer is not None and ip_address(peer).is_loopback
+            except ValueError:
+                allowed = False
+            if not allowed:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Local-only research API: remote clients are not allowed"},
+                )
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     service = ResearchService(db_path, model_path)
     app.state.research_service = service
 
     def database_or_503():
         try:
             return service.context()
-        except (FileNotFoundError, OSError, ValueError, sqlite3.DatabaseError) as exc:
+        except (FileNotFoundError, OSError, ValueError, KeyError, TypeError, sqlite3.DatabaseError) as exc:
             raise HTTPException(
                 status_code=503,
                 detail="Local HPO knowledge unavailable. Run python -m src.data and python -m src.knowledge_db build",
@@ -76,6 +105,18 @@ def create_app(
             raise HTTPException(
                 status_code=503,
                 detail="Verified local trained model unavailable or incompatible. Run python -m src.train_ml",
+            ) from exc
+
+    @contextmanager
+    def read_connection():
+        """Return controlled HTTP 503 for an unexpected transient database failure."""
+        try:
+            with open_readonly(service.db_path) as conn:
+                yield conn
+        except (FileNotFoundError, OSError, sqlite3.DatabaseError) as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Local HPO database is unavailable during this request",
             ) from exc
 
     def ensure_snapshot_stable(context: dict):
@@ -148,7 +189,7 @@ def create_app(
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             return search_phenotypes(conn, q, limit)
 
     @app.get(API_PREFIX + "/phenotypes/{hpo_id}", response_model=Phenotype, tags=["Phenotypes"])
@@ -156,7 +197,7 @@ def create_app(
         hpo_id: Annotated[str, URLPath(pattern=r"^HP:\d{7}$")],
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             found = phenotype(conn, hpo_id)
         if found is None:
             raise HTTPException(404, "HPO ID not found in the local ontology")
@@ -168,7 +209,7 @@ def create_app(
         limit: Annotated[int, Query(ge=1, le=100)] = 20,
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             return search_diseases(conn, q, limit)
 
     @app.get(API_PREFIX + "/diseases/{disease_id}", response_model=DiseaseDetail, tags=["Diseases"])
@@ -176,7 +217,7 @@ def create_app(
         disease_id: Annotated[str, URLPath(min_length=3, max_length=80, pattern=r"^[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_.-]+$")],
     ):
         database_or_503()
-        with open_readonly(service.db_path) as conn:
+        with read_connection() as conn:
             found = disease_detail(conn, disease_id)
         if found is None:
             raise HTTPException(404, "Disease ID not found in the local annotations")
@@ -204,6 +245,8 @@ def create_app(
                 quality=payload.quality, top_k=payload.top_k,
             )
             for row in rows:
+                if row["score"] <= 0:
+                    continue  # Never pad results with unsupported disease candidates.
                 matches = sorted(positive & context["profiles"].get(row["disease_id"], set()))
                 result.append({
                     "disease_id": row["disease_id"],
