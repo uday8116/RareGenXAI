@@ -1,3 +1,5 @@
+> **Updated handover status — 2026-11-23:** Phases 1–10 are integrated into `main` at source merge commit `ad53ece83beedadf3bf4cd31d511cfdafb61795e`. The owner explicitly requested **no testing** for this handover. Consequently, no tests were executed as part of this release preparation, and none of the historical CI/benchmark/local Mac acceptance gates should be marked passed. Earlier stacked PRs #10–#13 were closed as superseded after their commits were integrated via PR #14. Academic approval, local database/model preparation, and backup creation require the owner. Read [the no-testing handover](RELEASE_HANDOVER_NO_TESTING.md) before distributing this source snapshot.
+
 # Phase 10 — Release gate, ownership and evidence matrix
 
 **Roadmap:** tagged release candidate, limitations, demonstration and backup.
@@ -22,7 +24,7 @@ or complete system acceptance is asserted.
 - [ ] All six core artifact files backed up, hashed and safely restored.
 - [ ] User inspected real browser workflow, sanitized screenshots and artifacts.
 - [ ] GitHub Actions runner issue resolved and CI steps actually passed.
-- [ ] Upstream PRs, security review and Phase 10 PR merged in dependency order.
+- [x] Source changes from Phase 4–10 integrated into main via PRs #8, #9, and #14 (stacked #10–#13 superseded); this is **not acceptance evidence**.
 - [ ] Explicit maintainer tag authorization and a reviewed commit SHA.
 
 No unchecked gate may be represented as completed. A passing offline suite

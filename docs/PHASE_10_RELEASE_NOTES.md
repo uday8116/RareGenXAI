@@ -1,36 +1,29 @@
-# RareGenXAI v0.10.0-rc1 — Proposed research release notes
+# RareGenXAI — Release candidate handover (unverified)
 
-**NOT RELEASED OR TAGGED.** These draft notes explain what the eventual local
-research release candidate would contain, conditional on Phase 10 acceptance.
+**Source status:** Phases 1–10 are integrated into private GitHub `main` (2026-11-23). The source snapshot was merged through [PR #14](https://github.com/uday8116/RareGenXAI/pull/14), including Phase 4 API security protections and Phases 5–10 application/research code. The previous superseded stacked PRs were closed without separately merging each PR.
 
-## Scope
+**This is a source handover, not a verified software release.** At the owner's request, tests were not performed in this update. Previously GitHub Actions jobs failed before executing steps. No latest-commit passing run, Mac end-to-end demonstration, official HPO/model artifact audit, clinical evaluation or university supervisor sign-off has been established.
 
-- Source-verified HPO knowledge in local SQLite schema v2.
-- Overlap and semantic ranking; TF-IDF retrieval and experimental logistic,
-  random forest, XGBoost and MLP rerankers.
-- Local FastAPI and React frontend, evidence displays and strict HPO validation.
-- Phase 7 preregistered research audits and *historical* RareBench reanalysis;
-  Phase 8 system verification and Phase 9 academic drafting materials.
-- Phase 10 allowlisted research backup tool and SHA-256 integrity verification.
+## Included
 
-## Results with proper evidence
+React/Vite research interface, local-only FastAPI backend, HPO SQLite schema and importer, ontology-aware baselines, TF-IDF and experimental rerankers, XAI displays, research experiment and audit code, Phase 9 draft academic materials, Phase 10 local backup/restore tool and guidance.
 
-An older six-method archive contained 178 eligible published RareBench cases.
-Exact-overlap Top-1 was 37.64% and Top-5 was 54.49%; XGBoost Top-1 was
-36.52%. These are saved earlier predictions, **not fresh Phase 7 inference**
-or clinically validated accuracy. See `docs/PHASE_07_HISTORICAL_REANALYSIS.md`
-and `docs/PHASE_09_EVIDENCE_LEDGER.md`. No matched DeepRare case output.
+## Data distribution
 
-## Environment and restrictions
+The project does **not** bundle `data/local/raregen.sqlite3`, `data/raw/` official ontology/annotation files, `models/raregen_ml.joblib` or model manifests. They are private local artifacts created on the owner’s Mac from documented official data/training commands. Do not expose a backup or deserialize a model from an untrusted source.
 
-The local project targets macOS Apple Silicon with Python 3.11 and Node 22.
-It is research only, not a medical device or a public web service. Downloaded
-HPO knowledge and joblib binaries are excluded from Git and any proposed public
-release. Only load model files from an established trusted source.
+## Research result disclosure
 
-## Unresolved for final release
+The archived six-method RareBench snapshot covers 178 eligible previously saved cases. The exact-overlap baseline had Top-1 37.64% and Top-5 54.49% in that snapshot. These results have not been re-inferred in the present handover, and do not demonstrate clinical accuracy. See `docs/PHASE_09_EVIDENCE_LEDGER.md`.
 
-Actual working GitHub Actions runs, Phase 7 new benchmark, Phase 8 Mac full
-integration/restart, Phase 9 supervisor/campus approval, real screenshots,
-backup-restore drill, correct stacked PR merges, and explicit tag approval.
-No release tag is created in the Phase 10 PR.
+## Status
+
+- Code integrated: **yes**.
+- Production/clinical release: **no**.
+- Tests: **deliberately skipped by owner instruction**.
+- Local database/model verified: **no**.
+- Academic approvals: **pending**.
+- GitHub tag and published release: **not created**.
+- Detailed inventory and handover steps: `docs/RELEASE_HANDOVER_NO_TESTING.md`.
+
+Research prototype only; not for clinical diagnosis.

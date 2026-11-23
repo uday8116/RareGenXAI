@@ -1,10 +1,12 @@
+> **Current status:** Source code for all planned phases was integrated into `main` via merged PRs #8, #9 and #14. Stacked PRs #10–#13 were closed as superseded, not individually merged. By owner request, testing is skipped for this handover. Read [the no-testing handover](RELEASE_HANDOVER_NO_TESTING.md) for the updated record. This is not an approved research, academic or clinical release.
+
 # RareGenXAI — Phase 10 release and handover
 
 **Release state: CANDIDATE PREPARATION, NOT RELEASED.** Research-only rare-disease candidate ranking. No clinical diagnosis or calibrated risk. This guide accompanies the Phase 10 backup tool and release checks.
 
 ## What will be handed over
 
-- Full Git repository history plus branch/PR review evidence. Phases 5–9 have unresolved upstream merges and acceptance.
+- Full Git repository history plus branch/PR review evidence. Phase 5–9 source changes are now integrated into main; test and academic acceptance remain unverified.
 - Official, licensed HPO source files, versioned schema-v2 SQLite knowledge, and verified locally trusted model artifacts. These are NOT in Git.
 - React/Vite UI, local loopback FastAPI service, baseline and ML ranking logic and explanations.
 - Historical six-method RareBench archive reanalysis and frozen future Phase 7 experiment protocol, with clearly separated source snapshots.
@@ -61,7 +63,7 @@ prove clinical validity or application correctness.
    checks cannot be called passing.
 2. Phase 7 fresh official-data, Phase 8 official Mac and Phase 9 institutional
    approval are incomplete or unverified.
-3. Stacked Phase 5–9 PRs and independent Phase 4 review require resolution.
+3. All source changes were integrated into main; outstanding CI/test acceptance still requires work if verification is resumed.
 4. Earlier RareBench saved predictions lack complete original inference inputs
    and model bytes; no genuine matched-case DeepRare result exists.
 5. Local-only demo has no public-facing authentication or clinical certification.
