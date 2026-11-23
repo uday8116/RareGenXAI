@@ -1,0 +1,28 @@
+name: Phase 9 Documentation Consistency
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/PHASE_09_*.md'
+      - 'tests/test_phase9_docs.py'
+      - '.github/workflows/phase9-documentation.yml'
+  pull_request:
+    paths:
+      - 'docs/PHASE_09_*.md'
+      - 'tests/test_phase9_docs.py'
+      - '.github/workflows/phase9-documentation.yml'
+  workflow_dispatch:
+
+jobs:
+  documentation-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install static verification dependency
+        run: python -m pip install 'pytest>=8,<10'
+      - name: Verify source-aligned documentation and archived numbers
+        run: python -m pytest -q tests/test_phase9_docs.py

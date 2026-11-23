@@ -69,4 +69,5 @@ export const api = {
   diseases: (query, signal) => call('/diseases/search?q=' + encodeURIComponent(query) + '&limit=25', { signal }),
   disease: (id) => call('/diseases/' + encodeURIComponent(id)),
   rank: (payload, signal) => call('/rank', { method: 'POST', body: payload, signal, timeout: 60000 }),
+  explain: (payload, signal) => call('/explain', { method: 'POST', body: payload, signal, timeout: 20000 }),
 };

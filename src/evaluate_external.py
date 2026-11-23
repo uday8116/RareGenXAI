@@ -44,13 +44,25 @@ def main():
     parser.add_argument("--out", default="results/external_case_results.csv")
     parser.add_argument("--methods", nargs="+", default=["tfidf", "logistic", "random_forest", "xgboost", "mlp", "overlap", "semantic", "quality_semantic"])
     parser.add_argument("--max-cases", type=int, default=0)
+    parser.add_argument("--retrieval-k", type=int, default=40, help="Pre-registered TF-IDF candidate shortlist size")
+    parser.add_argument("--phase7-plan", type=Path, default=None,
+                        help="Require matching frozen Phase 7 protocol BEFORE any inference")
     args = parser.parse_args()
+    if args.retrieval_k <= 0 or args.max_cases < 0:
+        raise ValueError("--retrieval-k must be positive and --max-cases nonnegative")
     allowed = {"tfidf", "logistic", "random_forest", "xgboost", "mlp",
                "overlap", "semantic", "quality_semantic"}
     if not args.methods or any(m not in allowed for m in args.methods):
         raise ValueError(f"Invalid model method; choose from {sorted(allowed)}")
     if len(set(args.methods)) != len(args.methods):
         raise ValueError("Duplicate model methods are not allowed")
+    if args.phase7_plan is not None:
+        from src.phase7_experiments import verify_plan_for_inference
+        verify_plan_for_inference(
+            args.phase7_plan, cases_path=args.cases, model_path=args.model,
+            methods=args.methods, retrieval_k=args.retrieval_k,
+            max_cases=args.max_cases, deeprare=args.deeprare,
+        )
     cases = read_cases(args.cases)
     if args.max_cases > 0:
         cases = cases[:args.max_cases]
@@ -59,6 +71,9 @@ def main():
     # Use the exact same candidate disease universe and HPO evidence snapshot
     # for knowledge baselines and supervised models.
     ml, manifest = load_verified_bundle(args.model)
+    # A frozen protocol requires every requested method before scoring a case.
+    from src.phase7_experiments import require_trained_models
+    require_trained_models(args.methods, ml.models)
     profiles = ml.profiles
     labels = ml.labels
     comparison = {}
@@ -86,9 +101,7 @@ def main():
         obs = [(t, "confirmed_present") for t in terms]
         for method in args.methods:
             if method in ("tfidf", "logistic", "random_forest", "xgboost", "mlp"):
-                if method != "tfidf" and method not in ml.models:
-                    continue
-                rows = ml.rank(obs, model=method, k=40)
+                rows = ml.rank(obs, model=method, k=args.retrieval_k)
             else:
                 rows = rank(obs, profiles, parents, ic, labels,
                             method="overlap" if method == "overlap" else "semantic",
@@ -100,7 +113,8 @@ def main():
                             "true_disease_id": case["disease_id"], "known_disease": known,
                             "rank": position or "", "top1": int(position == 1),
                             "top5": int(position is not None and position <= 5),
-                            "reciprocal_rank": 1 / position if position else 0})
+                            "reciprocal_rank": 1 / position if position else 0,
+                            "retrieval_k": args.retrieval_k})
         if comparison:
             position = score_rank(comparison[case["case_id"]], case["disease_id"])
             records.append({"case_id": case["case_id"], "cohort": case.get("cohort", "unspecified"), "method": "DeepRare_external",
@@ -108,7 +122,8 @@ def main():
                             "rank": position or "",
                             "top1": int(position == 1),
                             "top5": int(position is not None and position <= 5),
-                            "reciprocal_rank": 1 / position if position else 0})
+                            "reciprocal_rank": 1 / position if position else 0,
+                            "retrieval_k": args.retrieval_k})
     output = Path(args.out)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", newline="") as f:

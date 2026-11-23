@@ -2,7 +2,11 @@ name: External RareBench Patient Evaluation
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths:
+      - 'src/phase7_experiments.py'
+      - 'tests/test_phase7_experiments.py'
+      - 'scripts/verify_phase7.sh'
       - 'src/rarebench.py'
       - 'src/evaluate_external.py'
       - 'src/ml.py'
@@ -11,6 +15,9 @@ on:
       - 'src/model_bundle.py'
       - 'src/verify_models.py'
       - '.github/workflows/external.yml'
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 env:
   PYTHONHASHSEED: '42'
   OMP_NUM_THREADS: '1'
@@ -40,9 +47,35 @@ jobs:
           python -m src.verify_models --db data/local/raregen.sqlite3 --raw-dir data/raw
       - name: Fetch published patient test cases
         run: python -m src.rarebench --limit-per-subset 100000
-      - name: Evaluate independent published cases
-        run: python -m src.evaluate_external --cases data/external/rarebench_cases.csv --methods tfidf logistic random_forest xgboost mlp overlap
-      - name: Compute paired bootstrap confidence intervals
+      - name: Freeze official external experiment before ranking
+        run: |
+          python -m src.phase7_experiments freeze \
+            --cases data/external/rarebench_cases.csv \
+            --dataset-manifest data/external/rarebench_manifest.json \
+            --model-manifest models/raregen_ml.manifest.json \
+            --model models/raregen_ml.joblib \
+            --methods tfidf logistic random_forest xgboost mlp overlap \
+            --retrieval-k 40 --seed 42 --out results/phase7_plan.json
+      - name: Evaluate all pre-registered published cases
+        run: |
+          python -m src.evaluate_external \
+            --cases data/external/rarebench_cases.csv \
+            --model models/raregen_ml.joblib \
+            --methods tfidf logistic random_forest xgboost mlp overlap \
+            --retrieval-k 40 --phase7-plan results/phase7_plan.json \
+            --out results/external_case_results.csv
+      - name: Phase 7 strict paired cohort and provenance audit
+        run: |
+          python -m src.phase7_experiments audit \
+            --cases data/external/rarebench_cases.csv \
+            --dataset-manifest data/external/rarebench_manifest.json \
+            --model-manifest models/raregen_ml.manifest.json \
+            --model models/raregen_ml.joblib \
+            --plan results/phase7_plan.json \
+            --results results/external_case_results.csv \
+            --legacy-summary results/external_cohort_summary.csv \
+            --replicates 2000 --verify-model-membership --out-dir results
+      - name: Legacy exploratory bootstrap for backward comparability
         run: python -m src.paired_stats
       - name: Upload patient-level benchmark and provenance
         if: always()
@@ -54,6 +87,14 @@ jobs:
             results/external_case_results.csv
             results/external_cohort_summary.csv
             results/external_paired_bootstrap.csv
+            results/phase7_plan.json
+            results/phase7_provenance.json
+            results/phase7_research_report.md
+            results/phase7_case_audit.csv
+            results/phase7_cohort_metrics.csv
+            results/phase7_paired_effects.csv
+            results/phase7_error_analysis.csv
+            results/phase7_synthetic_training_overlap.csv
             results/ml_summary.csv
             models/raregen_ml.manifest.json
             data/raw/manifest.json

@@ -15,13 +15,14 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Path as URLPath, Query, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from src.api_schemas import (
     DiseaseDetail, DiseaseMatch, KnowledgeStats, ModelStatus,
     Phenotype, PhenotypeMatch, RankRequest, RankResponse,
+    ExplainRequest, ExplainResponse,
 )
 from src.api_service import ResearchService
 from src.db_access import (
@@ -29,7 +30,8 @@ from src.db_access import (
     search_diseases, search_phenotypes,
 )
 from src.ml import FEATURES
-from src.ranking import ancestors, rank as baseline_rank
+from src.ranking import rank as baseline_rank, ancestors
+from src.explainability import explain_candidate as trace_candidate
 
 
 API_PREFIX = "/api/v1"
@@ -59,8 +61,7 @@ def create_app(
         allow_credentials=False, allow_methods=["GET", "POST"],
         allow_headers=["Content-Type"], max_age=600,
     )
-    # CORS only controls browsers; these guards enforce local-only access
-    # even if uvicorn is accidentally started with --host 0.0.0.0.
+    # CORS does not block nonbrowser HTTP clients: require loopback origin.
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["localhost", "127.0.0.1", "testserver"],
@@ -80,7 +81,6 @@ def create_app(
                     content={"detail": "Local-only research API: remote clients are not allowed"},
                 )
         response = await call_next(request)
-        # Avoid retaining phenotype-ranking responses in browser/proxy caches.
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -109,7 +109,7 @@ def create_app(
 
     @contextmanager
     def read_connection():
-        """Return 503 (not a leaking trace) when the DB changes mid-request."""
+        """Return controlled HTTP 503 for an unexpected transient database failure."""
         try:
             with open_readonly(service.db_path) as conn:
                 yield conn
@@ -118,6 +118,43 @@ def create_app(
                 status_code=503,
                 detail="Local HPO database is unavailable during this request",
             ) from exc
+
+    def ensure_snapshot_stable(context: dict):
+        """Prevent mixing ontology metadata from different atomic SQLite versions."""
+        try:
+            if service._file_key(service.db_path) != context["_file_key"]:
+                raise HTTPException(503, "HPO knowledge snapshot changed during request. Rerun analysis")
+        except OSError as exc:
+            raise HTTPException(503, "HPO knowledge snapshot became unavailable") from exc
+
+    def canonical_observations(payload: RankRequest, context: dict):
+        """Validate real clinical HPO findings for BOTH rank and explain.
+
+        Excludes HPO root, inheritance categories, and nonclinical terms.
+        Transient read failures return HTTP 503 rather than a traceback.
+        """
+        normalized, seen = [], set()
+        ensure_snapshot_stable(context)
+        try:
+            with open_readonly(service.db_path) as conn:
+                for item in payload.observations:
+                    term = phenotype(conn, item.hpo_id)
+                    if term is None:
+                        raise HTTPException(422, "Unknown HPO ID in observations")
+                    if term["is_obsolete"]:
+                        raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
+                    canonical = term["hpo_id"]
+                    if (canonical == "HP:0000118" or
+                            "HP:0000118" not in ancestors(canonical, context["parents"])):
+                        raise HTTPException(422, "HPO ID is not a clinical phenotypic abnormality")
+                    if canonical in seen:
+                        raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
+                    seen.add(canonical)
+                    normalized.append((canonical, item.status))
+        except (OSError, sqlite3.DatabaseError) as exc:
+            raise HTTPException(503, "Local HPO knowledge changed or is temporarily unreadable") from exc
+        ensure_snapshot_stable(context)
+        return normalized
 
     @app.get(API_PREFIX + "/health", tags=["System"])
     def health():
@@ -195,28 +232,7 @@ def create_app(
     def rank_diseases(payload: RankRequest):
         """Return ranked research candidates, never probabilities or a diagnosis."""
         context = database_or_503()
-        normalized = []
-        seen = set()
-        with read_connection() as conn:
-            for item in payload.observations:
-                term = phenotype(conn, item.hpo_id)
-                if term is None:
-                    raise HTTPException(422, "Unknown HPO ID in observations")
-                if term["is_obsolete"]:
-                    raise HTTPException(422, "Obsolete HPO ID: use a current phenotype term")
-                canonical = term["hpo_id"]
-                # Only actual clinical phenotype terms under HP:0000118 are
-                # eligible for disease ranking. Inheritance/mode of transmission
-                # and ontology root headings are not patient symptom findings.
-                if (canonical == "HP:0000118" or
-                        "HP:0000118" not in ancestors(canonical, context["parents"])):
-                    raise HTTPException(
-                        422, "HPO ID is not a clinical phenotypic abnormality"
-                    )
-                if canonical in seen:
-                    raise HTTPException(422, "Repeated phenotype after HPO alias normalization")
-                seen.add(canonical)
-                normalized.append((canonical, item.status))
+        normalized = canonical_observations(payload, context)
         positive = {t for t, s in normalized if s in ("confirmed_present", "suspected_present")}
         result = []
         model_hash = None
@@ -229,11 +245,8 @@ def create_app(
                 quality=payload.quality, top_k=payload.top_k,
             )
             for row in rows:
-                # Baselines otherwise return unrelated zero/negative-score
-                # candidates merely to fill top_k. Do not imply a disease
-                # match when there is no positive ranking evidence.
                 if row["score"] <= 0:
-                    continue
+                    continue  # Never pad results with unsupported disease candidates.
                 matches = sorted(positive & context["profiles"].get(row["disease_id"], set()))
                 result.append({
                     "disease_id": row["disease_id"],
@@ -265,13 +278,36 @@ def create_app(
                 })
             explanation_type = "matched_terms_and_feature_values"
             model_hash = manifest["artifact_sha256"]
+        ensure_snapshot_stable(context)
         return {
             "method": payload.method,
+            "knowledge_manifest_sha256": context["knowledge_manifest_sha256"],
             "requested_count": len(normalized),
             "results": result,
             "explanation_type": explanation_type,
             "model_sha256": model_hash,
         }
+
+    @app.post(API_PREFIX + "/explain", response_model=ExplainResponse, tags=["Explainability"])
+    def explain_disease(payload: ExplainRequest):
+        """Explain ontology links for one chosen candidate, not model SHAP."""
+        context = database_or_503()
+        if payload.disease_id not in context["profiles"]:
+            raise HTTPException(404, "Disease candidate not found in the local phenotype knowledge base")
+        normalized = canonical_observations(payload, context)
+        manifest = None
+        if payload.method not in ("overlap", "semantic"):
+            _, manifest = model_or_503()
+        ic = service.information_content() if payload.method == "semantic" else {}
+        explanation = trace_candidate(
+            normalized, payload.disease_id, context["profiles"], context["parents"], ic,
+            method=payload.method, quality=payload.quality, labels=context["labels"],
+        )
+        if manifest is not None:
+            explanation["model_sha256"] = manifest["artifact_sha256"]
+        explanation["knowledge_manifest_sha256"] = context["knowledge_manifest_sha256"]
+        ensure_snapshot_stable(context)
+        return explanation
 
     return app
 

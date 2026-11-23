@@ -111,6 +111,10 @@ class RankedDisease(BaseModel):
 class RankResponse(BaseModel):
     method: Method
     requested_count: int
+    knowledge_manifest_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$",
+        description="SHA-256 of validated HPO source manifest metadata, not database bytes",
+    )
     results: list[RankedDisease]
     explanation_type: Literal["per_phenotype_score_contributions", "matched_terms_and_feature_values"]
     model_sha256: str | None = None
@@ -118,3 +122,39 @@ class RankResponse(BaseModel):
         "Research-only candidate prioritization. Scores are not calibrated "
         "disease probabilities and must not be used for diagnosis or treatment."
     )
+
+
+class ExplainRequest(RankRequest):
+    """Bounded local evidence trace for one disease candidate."""
+    disease_id: str = Field(
+        min_length=3, max_length=80,
+        pattern=r"^[A-Za-z][A-Za-z0-9_.-]*:[A-Za-z0-9_.-]+$",
+    )
+
+
+class OntologyEvidence(BaseModel):
+    hpo_id: str
+    status: Status
+    relation: Literal["exact", "ontology_related", "none"]
+    best_disease_hpo_id: str | None = None
+    shared_ancestor_hpo_id: str | None = None
+    match: float = Field(ge=0, le=1)
+    evidence_weight: float | None = None
+    contribution: float | None = None
+
+
+class ExplainResponse(BaseModel):
+    method: Method
+    knowledge_manifest_sha256: str | None = Field(
+        default=None, pattern=r"^[a-f0-9]{64}$",
+        description="SHA-256 of validated HPO source manifest metadata, not database bytes",
+    )
+    disease_id: str
+    disease_name: str
+    explanation_type: Literal[
+        "signed_ontology_contributions", "ontology_context_not_ml_attribution",
+    ]
+    evidence: list[OntologyEvidence]
+    reconstructed_baseline_score: float | None = None
+    model_sha256: str | None = None
+    disclaimer: str

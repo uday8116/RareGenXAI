@@ -1,0 +1,80 @@
+name: Phase 6 Explainability and Case Comparison
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/explainability.py'
+      - 'src/api.py'
+      - 'src/api_schemas.py'
+      - 'src/api_service.py'
+      - 'tests/test_explainability.py'
+      - 'tests/test_api.py'
+      - 'tests/test_phase6_integration.py'
+      - 'scripts/verify_phase6.sh'
+      - 'frontend/src/App.jsx'
+      - 'frontend/src/api.js'
+      - 'frontend/src/xai.js'
+      - 'frontend/src/components/ExplanationLab.jsx'
+      - 'frontend/tests/xai.logic.test.mjs'
+      - 'docs/PHASE_06_EXPLAINABILITY.md'
+      - '.github/workflows/phase6-explainability.yml'
+  pull_request:
+    paths:
+      - 'src/explainability.py'
+      - 'src/api.py'
+      - 'src/api_schemas.py'
+      - 'src/api_service.py'
+      - 'tests/test_explainability.py'
+      - 'tests/test_api.py'
+      - 'tests/test_phase6_integration.py'
+      - 'scripts/verify_phase6.sh'
+      - 'frontend/src/App.jsx'
+      - 'frontend/src/api.js'
+      - 'frontend/src/xai.js'
+      - 'frontend/src/components/ExplanationLab.jsx'
+      - 'frontend/tests/xai.logic.test.mjs'
+      - 'docs/PHASE_06_EXPLAINABILITY.md'
+      - '.github/workflows/phase6-explainability.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  xai-python-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check local acceptance script syntax
+        run: bash -n scripts/verify_phase6.sh
+      - name: Install standard research dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Verify ontology evidence and FastAPI explanation
+        run: python -m pytest -q tests/test_explainability.py tests/test_api.py
+      - name: Confirm new explanation in OpenAPI schema
+        run: |
+          python - <<'PY'
+          from src.api import create_app
+          assert "/api/v1/explain" in create_app().openapi()["paths"]
+          print("Phase 6 OpenAPI route available")
+          PY
+
+  xai-node-logic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run dependency-free JavaScript research safeguards
+        run: npm run test:logic

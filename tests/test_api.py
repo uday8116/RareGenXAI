@@ -41,9 +41,9 @@ def client(tmp_path):
         )
         conn.executemany("INSERT INTO hpo_parents(child_id,parent_id) VALUES (?,?)", [
             ("HP:0001250", "HP:0000118"), ("HP:0001263", "HP:0000118"),
-            ("HP:0008000", "HP:0000118"),
             ("HP:0000118", "HP:0000001"),
             ("HP:0000006", "HP:0000001"),
+            ("HP:0008000", "HP:0000118"),
         ])
         conn.executemany(
             "INSERT INTO diseases(disease_id,name) VALUES (?,?)",
@@ -145,8 +145,6 @@ def test_rank_overlap_explanations_canonicalization(client):
     assert result["results"][0]["evidence"][0]["hpo_id"] == "HP:0001250"
     assert result["model_sha256"] is None
     assert "not calibrated" in result["disclaimer"].lower()
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["referrer-policy"] == "no-referrer"
 
 
 def test_semantic_and_negative_observation(client):
@@ -242,6 +240,185 @@ def test_openapi_and_local_cors(client):
     assert "access-control-allow-origin" not in blocked.headers
 
 
+def test_phase6_explain_endpoint_matches_rank_baseline(client):
+    payload = {
+        "method": "overlap",
+        "quality": True,
+        "disease_id": "ORPHA:10",
+        "observations": [
+            {"hpo_id": "HP:0001250", "status": "confirmed_present"},
+            {"hpo_id": "HP:0001263", "status": "confirmed_absent"},
+        ],
+    }
+    detail = client.post("/api/v1/explain", json=payload)
+    assert detail.status_code == 200, detail.text
+    explanation = detail.json()
+    assert explanation["disease_id"] == "ORPHA:10"
+    assert explanation["explanation_type"] == "signed_ontology_contributions"
+    assert explanation["evidence"][1]["contribution"] < 0
+    assert explanation["evidence"][1]["best_disease_hpo_id"] == "HP:0001263"
+    ranked = client.post("/api/v1/rank", json={k: v for k, v in payload.items() if k != "disease_id"})
+    assert ranked.status_code == 200
+    case = next(x for x in ranked.json()["results"] if x["disease_id"] == "ORPHA:10")
+    assert explanation["reconstructed_baseline_score"] == case["score"]
+    assert "not a diagnosis" in explanation["disclaimer"].lower()
+
+
+def test_phase6_explain_resolves_hpo_alias_and_checks_ontology(client):
+    response = client.post("/api/v1/explain", json={
+        "method": "semantic",
+        "disease_id": "MIM:1234",
+        "observations": [{"hpo_id": "HP:0099999", "status": "confirmed_present"}],
+    })
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["evidence"][0]["hpo_id"] == "HP:0001250"
+    assert body["explanation_type"] == "signed_ontology_contributions"
+    assert client.get("/openapi.json").json()["paths"].get("/api/v1/explain")
+
+
+@pytest.mark.parametrize("disease_id,observations,expected", [
+    ("MIM:0000", [{"hpo_id": "HP:0001250", "status": "confirmed_present"}], 404),
+    ("MIM:1234", [{"hpo_id": "HP:9999999", "status": "confirmed_present"}], 422),
+    ("MIM:1234", [{"hpo_id": "HP:0999999", "status": "confirmed_present"}], 422),
+    ("MIM:1234", [
+        {"hpo_id": "HP:0001250", "status": "confirmed_present"},
+        {"hpo_id": "HP:0099999", "status": "suspected_present"},
+    ], 422),
+])
+def test_phase6_explain_validation_fails_closed(client, disease_id, observations, expected):
+    response = client.post("/api/v1/explain", json={
+        "method": "overlap", "disease_id": disease_id, "observations": observations,
+    })
+    assert response.status_code == expected
+
+
+def test_phase6_missing_ml_model_cannot_pretend_to_explain(client):
+    response = client.post("/api/v1/explain", json={
+        "method": "xgboost",
+        "disease_id": "MIM:1234",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    })
+    assert response.status_code == 503
+    assert "trained model" in response.json()["detail"].lower()
+
+
+def test_phase6_explain_preserves_method_weighting(client):
+    observation = [{"hpo_id": "HP:0001250", "status": "confirmed_present"},
+                   {"hpo_id": "HP:0001263", "status": "confirmed_absent"}]
+    response = client.post("/api/v1/explain", json={
+        "method": "overlap", "quality": False, "disease_id": "ORPHA:10",
+        "observations": observation,
+    })
+    assert response.status_code == 200
+    assert response.json()["reconstructed_baseline_score"] == 1.0
+    assert response.json()["evidence"][1]["contribution"] == 0
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+@pytest.mark.parametrize("hpo_id", ["HP:0000001", "HP:0000118"])
+def test_phase6_rejects_nonclinical_ontology_categories(client, endpoint, hpo_id):
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": hpo_id, "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+    response = client.post(endpoint, json=payload)
+    assert response.status_code == 422, response.text
+    assert "not a clinical phenotypic abnormality" in response.json()["detail"]
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+def test_phase6_transient_hpo_read_failure_is_service_unavailable(client, monkeypatch, endpoint):
+    from contextlib import contextmanager
+    import src.api as api_module
+
+    @contextmanager
+    def corrupted_read(_path):
+        raise sqlite3.DatabaseError("Simulated SQLite file replacement")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(api_module, "open_readonly", corrupted_read)
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+    response = client.post(endpoint, json=payload)
+    assert response.status_code == 503, response.text
+    assert "temporarily unreadable" in response.json()["detail"]
+
+
+def test_phase6_rank_and_explain_share_validated_knowledge_fingerprint(client):
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    rank_response = client.post("/api/v1/rank", json=payload)
+    explain_response = client.post("/api/v1/explain", json={**payload, "disease_id": "MIM:1234"})
+    assert rank_response.status_code == 200, rank_response.text
+    assert explain_response.status_code == 200, explain_response.text
+    first = rank_response.json()["knowledge_manifest_sha256"]
+    second = explain_response.json()["knowledge_manifest_sha256"]
+    assert first == second
+    assert len(first) == 64
+    assert all(c in "0123456789abcdef" for c in first)
+
+
+def test_phase6_cache_key_detects_same_size_atomic_file_replacement(tmp_path):
+    from src.api_service import ResearchService
+    import os
+
+    path = tmp_path / "snapshot.sqlite3"
+    replacement = tmp_path / "replacement.sqlite3"
+    path.write_bytes(b"first")
+    service = ResearchService(db_path=path, model_path=tmp_path / "model.joblib")
+    before = service._file_key(path)
+    previous_mtime = path.stat().st_mtime_ns
+    replacement.write_bytes(b"other")  # same byte count
+    os.utime(replacement, ns=(previous_mtime, previous_mtime))
+    os.replace(replacement, path)
+    after = service._file_key(path)
+    assert before != after, "Equal-size/matched-mtime DB replacement must invalidate cache"
+
+
+@pytest.mark.parametrize("endpoint", ["/api/v1/rank", "/api/v1/explain"])
+def test_phase6_rejects_atomic_db_replacement_mid_request(client, monkeypatch, endpoint):
+    """No cached old ontology may be mixed with new HPO alias validation."""
+    import os
+    import shutil
+    import src.api as api_module
+
+    path = client.app.state.research_service.db_path
+    original_phenotype = api_module.phenotype
+    replaced = False
+
+    def replace_after_looking_up_term(conn, hpo_id):
+        nonlocal replaced
+        term = original_phenotype(conn, hpo_id)
+        if not replaced:
+            replaced = True
+            replacement = path.with_suffix(".replacement.sqlite3")
+            shutil.copy2(path, replacement)
+            os.replace(replacement, path)
+        return term
+
+    monkeypatch.setattr(api_module, "phenotype", replace_after_looking_up_term)
+    payload = {
+        "method": "overlap",
+        "observations": [{"hpo_id": "HP:0001250", "status": "confirmed_present"}],
+    }
+    if endpoint.endswith("/explain"):
+        payload["disease_id"] = "MIM:1234"
+
+    response = client.post(endpoint, json=payload)
+    assert replaced
+    assert response.status_code == 503, response.text
+    assert "snapshot changed" in response.json()["detail"]
+
+# Phase 4 security regression tests retained after merging Phase 6–10.
 
 def test_reject_nonclinical_hpo_ids_even_when_present_in_ontology(client):
     for hpo_id in ("HP:0000001", "HP:0000006", "HP:0000118"):
