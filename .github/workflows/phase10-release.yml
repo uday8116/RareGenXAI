@@ -1,0 +1,38 @@
+name: Phase 10 Release and Backup Integrity
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/phase10_backup.py'
+      - 'scripts/verify_phase10.sh'
+      - 'tests/test_phase10_backup.py'
+      - 'docs/PHASE_10_*.md'
+      - '.github/workflows/phase10-release.yml'
+  pull_request:
+    paths:
+      - 'scripts/phase10_backup.py'
+      - 'scripts/verify_phase10.sh'
+      - 'tests/test_phase10_backup.py'
+      - 'docs/PHASE_10_*.md'
+      - '.github/workflows/phase10-release.yml'
+  workflow_dispatch:
+
+jobs:
+  release-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate full-check recipe syntax
+        run: bash -n scripts/verify_phase10.sh
+      - name: Install offline test runner
+        run: python -m pip install 'pytest>=8,<10'
+      - name: Run Phase 10 fixture backup and Phase 9 document tests
+        run: bash scripts/verify_phase10.sh --quick
+      - name: Check source parsing
+        run: python -m py_compile scripts/phase10_backup.py tests/test_phase10_backup.py
