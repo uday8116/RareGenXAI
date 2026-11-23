@@ -305,3 +305,4 @@ Do not publish local research backups or load untrusted model joblib files.
 - [Phase 10 release and handover](docs/PHASE_10_RELEASE_HANDOVER.md)
 - [Phase 10 acceptance matrix](docs/PHASE_10_ACCEPTANCE.md)
 - [Draft release notes: not released](docs/PHASE_10_RELEASE_NOTES.md)
+- [Independent Phase 10 audit and remaining blockers](docs/PHASE_10_FINAL_AUDIT.md)
