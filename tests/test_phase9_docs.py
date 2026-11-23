@@ -84,3 +84,34 @@ def test_all_submission_documents_use_one_archive():
         assert "DeepRare" in content
     assert "44467435510" in ledger
     assert "not verified" in ledger.lower()
+
+
+def test_all_six_archived_methods_and_metrics_consistent():
+    ledger = (DOCS / "PHASE_09_EVIDENCE_LEDGER.md").read_text(encoding="utf-8")
+    dissertation = (DOCS / "PHASE_09_DISSERTATION_DRAFT.md").read_text(encoding="utf-8")
+    slides = (DOCS / "PHASE_09_PRESENTATION.md").read_text(encoding="utf-8")
+    # Compare every source-reported metric, not just the best two methods.
+    metrics = {
+        "overlap": ("37.64%", "54.49%", "0.453"),
+        "xgboost": ("36.52%", "51.69%", "0.436"),
+        "logistic": ("34.27%", "48.88%", "0.410"),
+        "random_forest": ("32.58%", "42.13%", "0.371"),
+        "mlp": ("30.90%", "41.57%", "0.363"),
+        "tfidf": ("29.78%", "43.26%", "0.361"),
+    }
+    archived = (DOCS / "PHASE_07_HISTORICAL_REANALYSIS.md").read_text(encoding="utf-8")
+    for method, values in metrics.items():
+        for metric in values:
+            assert metric in ledger, (method, metric, "ledger")
+            assert metric in dissertation, (method, metric, "dissertation")
+            assert metric in slides, (method, metric, "slides")
+            assert metric in archived, (method, metric, "saved archive")
+
+
+def test_new_submission_draft_requires_approval_not_fabricated_signatures():
+    draft = (DOCS / "PHASE_09_DISSERTATION_DRAFT.md").read_text(encoding="utf-8")
+    acceptance = (DOCS / "PHASE_09_PLAN_AND_ACCEPTANCE.md").read_text(encoding="utf-8")
+    assert "not" in draft.lower() and "clinical" in draft.lower()
+    assert "supervisor" in acceptance.lower()
+    assert "template" in acceptance.lower()
+    assert "PHASE_09_EVIDENCE_LEDGER.md" in acceptance
