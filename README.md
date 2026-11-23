@@ -308,3 +308,14 @@ Do not publish local research backups or load untrusted model joblib files.
 - [Independent Phase 10 audit and remaining blockers](docs/PHASE_10_FINAL_AUDIT.md)
 
 See [Phase 4 independent local API security review](docs/PHASE_04_REVIEW.md) for preserved loopback controls and source integrity checks.
+
+
+## Source handover without testing (owner-requested, 2026-11-23)
+
+Phases 1–10 are merged into private GitHub `main`. This is an **unverified research
+source snapshot**, not a clinical or production software release. The owner
+asked to skip testing; no verification runs or clinical acceptance are implied.
+See [no-testing release handover](docs/RELEASE_HANDOVER_NO_TESTING.md) and
+[revised release notes](docs/PHASE_10_RELEASE_NOTES.md).
+The generated HPO SQLite database at `data/local/raregen.sqlite3`, raw HPO data,
+and the trained `models/raregen_ml.joblib` are not stored in GitHub.
