@@ -11,6 +11,7 @@ FILES = (
     "PHASE_09_PRESENTATION.md",
     "PHASE_09_SPEECH_AND_VIVA.md",
     "PHASE_09_PLAN_AND_ACCEPTANCE.md",
+    "PHASE_09_EVIDENCE_LEDGER.md",
 )
 
 def test_all_documentation_exists_and_has_substance():
@@ -58,3 +59,28 @@ def test_phase9_acceptance_never_claims_latest_ci_pass():
     guide = (DOCS / "PHASE_09_PLAN_AND_ACCEPTANCE.md").read_text(encoding="utf-8")
     assert "not verified passing" in guide
     assert "Supervisor" in guide
+
+
+def test_legacy_report_and_draft_marked_historical():
+    old = (DOCS / "FINAL_PROJECT_REPORT.md").read_text(encoding="utf-8")
+    draft = (DOCS / "REPORT_DRAFT.md").read_text(encoding="utf-8")
+    ledger = (DOCS / "PHASE_09_EVIDENCE_LEDGER.md").read_text(encoding="utf-8")
+    for content in (old, draft):
+        assert "PHASE_09_EVIDENCE_LEDGER.md" in content
+    for value in ("27.53%", "30.34%", "34.27%", "29.78%"):
+        assert value in ledger, value
+    assert "different" in ledger.lower()
+
+
+def test_all_submission_documents_use_one_archive():
+    ledger = (DOCS / "PHASE_09_EVIDENCE_LEDGER.md").read_text(encoding="utf-8")
+    report = (DOCS / "PHASE_09_DISSERTATION_DRAFT.md").read_text(encoding="utf-8")
+    slides = (DOCS / "PHASE_09_PRESENTATION.md").read_text(encoding="utf-8")
+    speech = (DOCS / "PHASE_09_SPEECH_AND_VIVA.md").read_text(encoding="utf-8")
+    for content in (report, slides, speech):
+        assert "178" in content
+        assert "37.64" in content
+        assert "54.49" in content
+        assert "DeepRare" in content
+    assert "44467435510" in ledger
+    assert "not verified" in ledger.lower()
