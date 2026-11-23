@@ -276,3 +276,32 @@ python -m pytest -q tests/test_phase9_docs.py
 The historical archived 178-case findings are **not** a successful fresh Phase 7
 evaluation. University formatting, real screenshots, examiner/supervisor approval,
 and the still-pending Phase 7/8 acceptance are separate requirements.
+
+
+## Phase 10 — Local release and handover
+
+Phase 10 prepares a **research-only** release candidate with source-aware
+handover instructions, an explicit acceptance matrix, and a local artifact
+backup/restore tool with per-file SHA-256 integrity checks. The proposed
+`v0.10.0-rc1` tag has **not been created**; upstream PRs, GitHub CI,
+full Phase 7/8 validation, and supervisor approval remain outstanding.
+
+```bash
+bash scripts/verify_phase10.sh --quick  # synthetic backup security + docs checks
+bash scripts/verify_phase10.sh --full   # real model/data + app + backup/restore
+```
+
+For a private, local research backup:
+
+```bash
+python scripts/phase10_backup.py create --out ~/RareGenXAI-research-backup.zip
+python scripts/phase10_backup.py verify --archive ~/RareGenXAI-research-backup.zip
+python scripts/phase10_backup.py restore --archive ~/RareGenXAI-research-backup.zip \
+  --destination ~/RareGenXAI-restore-test
+```
+
+Do not publish local research backups or load untrusted model joblib files.
+
+- [Phase 10 release and handover](docs/PHASE_10_RELEASE_HANDOVER.md)
+- [Phase 10 acceptance matrix](docs/PHASE_10_ACCEPTANCE.md)
+- [Draft release notes: not released](docs/PHASE_10_RELEASE_NOTES.md)
