@@ -1,3 +1,5 @@
+> **Superseded early working draft:** This was written before the later six-method archived evaluation and React/FastAPI research implementation. For current Phase 9 academic material use [PHASE_09_DISSERTATION_DRAFT.md](PHASE_09_DISSERTATION_DRAFT.md) and [PHASE_09_EVIDENCE_LEDGER.md](PHASE_09_EVIDENCE_LEDGER.md). Do not present the old "results pending" or Streamlit-only scope as the latest project status.
+
 # M.Tech Project Report — Working Draft
 
 **Title:** Explainable AI-Based Classification of Rare Genetic Disorders Using Clinical Phenotypes and Human Phenotype Ontology
