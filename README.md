@@ -266,6 +266,8 @@ technical dissertation draft, editable 12-slide outline, presentation speech,
 - [M.Tech dissertation working draft](docs/PHASE_09_DISSERTATION_DRAFT.md)
 - [Presentation slide source](docs/PHASE_09_PRESENTATION.md)
 - [Speech and viva questions](docs/PHASE_09_SPEECH_AND_VIVA.md)
+- [Evidence ledger: separate archived benchmark snapshots](docs/PHASE_09_EVIDENCE_LEDGER.md)
+- [Independent Phase 9 final audit and remaining acceptance](docs/PHASE_09_FINAL_AUDIT.md)
 
 ```bash
 python -m pytest -q tests/test_phase9_docs.py
