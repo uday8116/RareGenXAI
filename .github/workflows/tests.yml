@@ -37,6 +37,8 @@ jobs:
       - name: Verify local ML artifact was generated
         run: python scripts/doctor.py --require-data --require-model
       - name: Exercise official HPO and model through local FastAPI
+        env:
+          RAREGEN_REQUIRE_PHASE4_INTEGRATION: '1'
         run: python -m pytest -q tests/test_api_integration.py
       - name: Phase 6 strict official HPO explanation and all-model consistency
         env:

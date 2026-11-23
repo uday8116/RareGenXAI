@@ -158,7 +158,7 @@ Open **http://127.0.0.1:5173**. The frontend only calls the same-origin `/api/v1
 
 The model dashboard links to historical 178-case RareBench measurements (it is **not** an automatic live evaluation). No external cloud hosting, patient identifiers, localStorage or GPU is required. The UI runs locally on the Apple M5 with 16 GB RAM. See [Phase 5 implementation and Mac guide](docs/PHASE_05_FRONTEND.md).
 
-Phase 4 review PR #8 is not merged into the original Phase 5 base; check its status separately. Do not consider the new frontend fully accepted until its GitHub CI and manual local integration pass.
+Phase 4 security review was integrated into the Phase 10 code before merging. Do not consider the new frontend fully accepted until its GitHub CI and manual local integration pass.
 
 ### Phase 5 research export and local acceptance
 
@@ -306,3 +306,5 @@ Do not publish local research backups or load untrusted model joblib files.
 - [Phase 10 acceptance matrix](docs/PHASE_10_ACCEPTANCE.md)
 - [Draft release notes: not released](docs/PHASE_10_RELEASE_NOTES.md)
 - [Independent Phase 10 audit and remaining blockers](docs/PHASE_10_FINAL_AUDIT.md)
+
+See [Phase 4 independent local API security review](docs/PHASE_04_REVIEW.md) for preserved loopback controls and source integrity checks.
