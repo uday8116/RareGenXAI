@@ -139,4 +139,37 @@ Open **http://127.0.0.1:8000/docs** for interactive Swagger/OpenAPI documentatio
 
 The server binds to loopback only and never stores patient observations. No AWS, Railway or external database is needed. See [Phase 4 backend plan and API documentation](docs/PHASE_04_BACKEND.md). The professional website and model dashboard remain a separate frontend phase.
 
-See [Phase 4 independent acceptance review](docs/PHASE_04_REVIEW.md) for the additional local-only API safeguards, clinical-phenotype validation, score filtering and GitHub acceptance status.
+## Phase 5: professional React research website (local-only)
+
+Phase 5 adds a responsive React + Vite website connected to the FastAPI research backend. It includes the overview dashboard, HPO phenotype-input workbench, explainable candidate rankings, disease explorer, historical model-comparison chart and API documentation. The research score is **never** a calibrated disease probability.
+
+```bash
+# Terminal 1 — from repository root, once Phase 2 data and Phase 3 models are prepared
+bash scripts/start_api.sh
+
+# Terminal 2 — from repository root
+cd frontend
+npm install
+npm run test
+npm run dev
+```
+
+Open **http://127.0.0.1:5173**. The frontend only calls the same-origin `/api/v1` endpoint through Vite's local proxy to `127.0.0.1:8000`. An unavailable backend is shown honestly: the workbench does not produce fake predictions.
+
+The model dashboard links to historical 178-case RareBench measurements (it is **not** an automatic live evaluation). No external cloud hosting, patient identifiers, localStorage or GPU is required. The UI runs locally on the Apple M5 with 16 GB RAM. See [Phase 5 implementation and Mac guide](docs/PHASE_05_FRONTEND.md).
+
+Phase 4 security and correctness review PR #8 was merged to main; its reviewed protections are included in the integration branch. Do not consider the new frontend fully accepted until its GitHub CI and manual local integration pass.
+
+### Phase 5 research export and local acceptance
+
+After running an analysis, you can deliberately **export the displayed disease rankings** as CSV or JSON to your own Mac. CSV text is protected against spreadsheet formula injection. Files may contain matched phenotype IDs, so take care before sharing. Ordinary HPO observations stay in memory unless you choose an export. The website never invents predictions when offline.
+
+The [Phase 5 independent acceptance audit](docs/PHASE_05_FINAL_AUDIT.md) records the stale-response fix, keyboard HPO improvements, opt-in export, smoke test and required verification. From the repository root, after starting both the API and React server, run:
+
+```bash
+python scripts/smoke_phase5.py
+```
+
+The Phase 5 PR remains unmerged until actual Node/Vitest and Vite build checks execute. The pre-execution GitHub Actions failures are not proof of test success.
+
+See [Phase 4 independent acceptance review](docs/PHASE_04_REVIEW.md) for local-only API safeguards and the outstanding full-test evidence.

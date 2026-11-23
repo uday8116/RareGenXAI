@@ -237,3 +237,9 @@ data/local/
 *.sqlite3
 *.sqlite3-shm
 *.sqlite3-wal
+
+# Phase 5 React / Vite local build and dependency cache
+frontend/node_modules/
+frontend/dist/
+frontend/coverage/
+frontend/.vite/
