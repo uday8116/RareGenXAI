@@ -2,9 +2,226 @@
 
 **Explainable AI-Based Classification of Rare Genetic Disorders Using Clinical Phenotypes and Human Phenotype Ontology**
 
-A reproducible **research prototype** that prioritizes candidate rare diseases using official HPO disease–phenotype annotations. It provides transparent per-finding score contributions and an experimental evidence-quality weighting scheme.
+A local research application that ranks rare disease candidates from HPO observations and explains the evidence behind the rankings. React + Vite frontend, Python + FastAPI backend, SQLite knowledge database, TF-IDF retrieval and supervised ML rerankers.
 
-> **Safety:** This is not a medical device and must not be used for diagnosis, treatment, or clinical decision-making. Scores are ranking scores, **not** probabilities. The application uses disease annotation knowledge; an external retrospective patient-case evaluation has also been completed.
+> Research only. Do not use this software for diagnosis or treatment or enter identifiable patient information. Ranking scores are not disease probabilities. Phases 1–10 are integrated into main; the latest complete runtime verification remains pending.
+
+## Start here: first-time laptop setup and teacher demonstration
+
+Follow these steps in order. No cloud account, separate database server or GPU is required for the standard website and ML training. Internet access is required for initial setup. Training and data preparation may be CPU/time intensive; complete them before presentation day.
+
+### 1. Install prerequisites
+
+- Git: https://git-scm.com/downloads
+- Python 3.11 (64-bit, native to your machine): https://www.python.org/downloads/
+- Node.js 22 with npm: https://nodejs.org/
+- A browser and terminal (PowerShell on Windows; Terminal on macOS/Linux).
+- Enough free disk space for packages, official HPO data, SQLite and saved models.
+
+On macOS with Homebrew, install Python and XGBoost's OpenMP runtime:
+
+```bash
+brew install python@3.11 git libomp
+```
+
+Install Node.js 22 from the official site or your version manager. On Windows, select the Python installer option to add Python to PATH if available. On Linux, ensure Python 3.11 and its venv support are installed using your distribution's package manager; XGBoost may also require the system OpenMP runtime.
+
+Check the installation:
+
+```bash
+git --version
+node --version
+npm --version
+```
+
+On Windows run `py -3.11 --version`; on macOS/Linux run `python3.11 --version`.
+
+### 2. Get the project from GitHub
+
+**The repository is private.** Ask the owner to invite your GitHub account as a collaborator, accept the invitation and sign in using your own GitHub credentials (Git Credential Manager or GitHub CLI authentication). Never share the owner's password or token.
+
+First download:
+
+```bash
+git clone https://github.com/uday8116/RareGenXAI.git
+cd RareGenXAI
+git switch main
+```
+
+If already cloned, open the existing project folder instead:
+
+```bash
+git switch main
+git pull --ff-only origin main
+```
+
+Run subsequent commands from the repository root (the folder containing README.md, requirements.txt, src and frontend), unless instructed otherwise. If pull reports local changes or divergent history, preserve your work and resolve it before continuing; do not force reset.
+
+### 3. Create a Python environment and install packages
+
+**Windows (PowerShell):**
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+If PowerShell blocks activation, use Command Prompt with `.venv\Scripts\activate.bat`, or invoke `.\.venv\Scripts\python.exe` instead of `python` in the remaining Python commands. No permanent execution-policy change is required.
+
+**macOS / Linux:**
+
+```bash
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+Check `python --version` (3.11) after activation. These manual commands are provided for Windows/Linux as well as macOS; the project's original verification scripts target macOS/bash. Windows/Linux compatibility has not been independently verified in the latest snapshot.
+
+### 4. Download the HPO dataset
+
+With the environment active:
+
+```bash
+python -m src.data
+```
+
+This downloads official HPO ontology and disease annotations (hp.obo and phenotype.hpoa), records their provenance in data/raw/manifest.json and prepares processed data. Wait for the command to finish successfully. You do not need to download a separate patient dataset to demonstrate ranking.
+
+### 5. Create the SQLite database
+
+First setup only:
+
+```bash
+python -m src.knowledge_db build
+python -m src.knowledge_db verify --raw-dir data/raw
+python -m src.knowledge_db search-hpo "seizure"
+```
+
+The database is created at `data/local/raregen.sqlite3`. It contains disease and phenotype knowledge, not patient records. If it already exists, verify it rather than rebuilding. If verification fails, back up existing artifacts before following the database migration/rebuild guide; do not use --replace casually.
+
+### 6. Train the machine learning models
+
+Run from the repository root, with the environment active and verified SQLite knowledge available:
+
+```bash
+python -m src.train_ml --seed 42 --train-diseases 600 --test-diseases 120 --queries-per-disease 2 --candidates 40
+python -m src.verify_models --db data/local/raregen.sqlite3 --raw-dir data/raw
+```
+
+This fits TF-IDF and trains Logistic Regression, Random Forest, XGBoost and MLP on synthetic HPO observations. It saves:
+
+- models/raregen_ml.joblib
+- models/raregen_ml.manifest.json
+
+Keep the bundle and manifest together with the matching HPO source files/database. Train once per compatible knowledge snapshot, not every time you start the website. Only load trusted locally generated model files. The experimental GNN is separate from the standard website model bundle.
+
+**If training is not finished:** you can still demonstrate overlap and semantic ranking once the database is ready. Do not claim that unavailable ML methods are running. Training metrics are synthetic research results, not clinical accuracy.
+
+### 7. Install frontend packages
+
+```bash
+cd frontend
+npm install
+cd ..
+```
+
+### 8. Start the backend (Terminal 1)
+
+Open a terminal in the repository root. Activate the environment again if using a new terminal.
+
+Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+python -m uvicorn src.api:app --host 127.0.0.1 --port 8000 --no-access-log
+```
+
+If activation is blocked, use `.\.venv\Scripts\python.exe -m uvicorn src.api:app --host 127.0.0.1 --port 8000 --no-access-log`.
+
+macOS/Linux:
+
+```bash
+source .venv/bin/activate
+bash scripts/start_api.sh
+```
+
+Leave this terminal running. Open these links in your browser:
+
+- http://127.0.0.1:8000/docs — API documentation
+- http://127.0.0.1:8000/api/v1/health — server liveness
+- http://127.0.0.1:8000/api/v1/ready — knowledge readiness (must succeed)
+- http://127.0.0.1:8000/api/v1/models — check model availability; status should be available for trained methods
+
+### 9. Start the website (Terminal 2)
+
+Open a second terminal in the repository root; do not stop the backend.
+
+```bash
+cd frontend
+npm run dev
+```
+
+Open **http://127.0.0.1:5173** in your browser. Both terminals must remain running. The Vite frontend proxies API requests to the local backend on port 8000. No public deployment is needed.
+
+### 10. Live demo for your teacher
+
+1. Open the homepage and show knowledge/model availability.
+2. Open [Phenotype workbench](http://127.0.0.1:5173/workbench).
+3. Click **Load example HPO terms**, or search for Seizure (HP:0001250), Hypotonia (HP:0001252) and Global developmental delay (HP:0001263) and add them as a fictional educational example.
+4. Mark findings as confirmed present or suspected present. At least one positive/suspected observation is required. You can also explore confirmed absent and unknown statuses.
+5. Select exact overlap and run the ranking. Show candidate names, order and relevance scores.
+6. Select a candidate and inspect its explanation, matching HPO evidence and supporting/contradicting contributions. Try semantic similarity to show related terms.
+7. If trained models are available, compare XGBoost or another ML method on the same observations using Explainability Laboratory. Try the one-phenotype removal sensitivity check. Learned model feature values are not SHAP attributions.
+8. Open the Disease Explorer and search for a known disease, then open Model Laboratory and Experiments to discuss historical research results. Export a CSV/JSON ranking only if appropriate; do not share identifying patient information.
+9. Explain that this is a research prototype, not a clinical diagnostic system. Historical results are not a fresh benchmark.
+
+### 11. Stop and restart later
+
+Press Ctrl+C in each terminal to stop the servers. Next time, open the project root in two terminals and repeat steps 8 and 9 only. You do not need to reinstall packages, redownload HPO, rebuild SQLite or retrain unless the environment/artifacts are missing or incompatible.
+
+### 12. Troubleshooting
+
+| Problem | What to do |
+| --- | --- |
+| Git clone says repository not found / authentication failed | Accept the private repository invitation and authenticate your own GitHub account. |
+| Python or npm not recognized | Install the required version, reopen terminal, check PATH. On Windows use py -3.11. |
+| PowerShell blocks activation or npm.ps1 | Use the explicit venv Python executable or Command Prompt; use npm.cmd in PowerShell if needed. |
+| XGBoost import fails on macOS | Install libomp with Homebrew and use native Python 3.11. |
+| HPO download fails | Check internet/proxy access, rerun python -m src.data, and verify source manifest. |
+| SQLite missing / readiness returns 503 | Run steps 4–5 from the repository root and restart API. |
+| Models unavailable or incompatible | Run model verification; if missing/incompatible, train against the current verified HPO database and restart API. |
+| Port 8000 or 5173 already used | Stop your previous server or identify the conflicting process; keep the documented ports for the frontend proxy. |
+| Website cannot reach API | Ensure Terminal 1 is running and readiness URL succeeds; refresh frontend. |
+| Invalid phenotype input / HTTP 422 | Choose valid HPO search results, avoid duplicates, and include at least one positive/suspected finding. |
+| Training takes time | Finish it before the demo; use baseline methods meanwhile. Do not present incomplete training as successful. |
+
+### 13. Before the presentation
+
+- [ ] GitHub access works and latest main is downloaded.
+- [ ] Python packages and frontend packages installed.
+- [ ] HPO downloaded and SQLite verification succeeds.
+- [ ] ML training and model verification succeed if showing trained models.
+- [ ] Both servers start and readiness/models endpoints are checked.
+- [ ] Educational example ranks successfully and explanation panel opens.
+- [ ] Save genuine screenshots as a backup; label historical results correctly.
+
+These are instructions for the student to execute; this README update does not establish a passing runtime or test result.
+
+Optional full verification on macOS/bash (stop both servers first; requires verified data/models and frontend dependencies):
+
+```bash
+bash scripts/verify_phase8.sh --full
+```
+
+See [local user guide](docs/PHASE_09_USER_GUIDE.md) (use main rather than its historical phase branch), [presentation outline](docs/PHASE_09_PRESENTATION.md), [speech and viva questions](docs/PHASE_09_SPEECH_AND_VIVA.md) and [dissertation draft](docs/PHASE_09_DISSERTATION_DRAFT.md).
+
+## Research and technical reference
+
+The following material records the phased development history. Historical branch/PR statuses are superseded by the final handover: phases 1–10 are integrated into private main, but latest full acceptance remains pending. Use the first-time setup above, not historical branch instructions.
 
 ## Features
 - Download and parse official HPO ontology (`hp.obo`) and disease annotations (`phenotype.hpoa`)
